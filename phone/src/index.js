@@ -40,6 +40,32 @@ program
     }
   });
 
+// ── RUN (scrape + send in one go) ───────────────────────────────────────────
+program
+  .command('run')
+  .description('Scrape Google Maps then immediately send WhatsApp messages to all new leads')
+  .requiredOption('-k, --keyword <keyword>', 'Type of business  (e.g. "restaurantes", "dentistas")')
+  .requiredOption('-l, --location <location>', 'City or area      (e.g. "Madrid", "Bogotá centro")')
+  .option('-m, --max <number>', 'Max leads to collect and message', '50')
+  .action(async (opts) => {
+    process.env.MAX_LEADS = opts.max;
+    try {
+      console.log(chalk.bold('\n── Step 1 / 2 — Scraping Google Maps ───────────'));
+      const found = await searchPlaces(opts.keyword, opts.location);
+
+      if (found === 0) {
+        console.log(chalk.yellow('\nNo new leads found — nothing to send.'));
+        return;
+      }
+
+      console.log(chalk.bold('\n── Step 2 / 2 — Sending WhatsApp messages ──────'));
+      await startWhatsAppBot(parseInt(opts.max));
+    } catch (err) {
+      console.error(chalk.red('\n❌ Error:'), err.message);
+      process.exit(1);
+    }
+  });
+
 // ── LEADS ───────────────────────────────────────────────────────────────────
 program
   .command('leads')
