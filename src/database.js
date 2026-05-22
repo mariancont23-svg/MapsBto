@@ -1,11 +1,11 @@
-import Database from 'better-sqlite3';
+import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'fs';
 import path from 'path';
 import config from './config.js';
 
 mkdirSync(path.dirname(config.dbPath), { recursive: true });
 
-const db = new Database(config.dbPath);
+const db = new DatabaseSync(config.dbPath);
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS leads (
@@ -35,9 +35,9 @@ export function insertLead(lead) {
   return db
     .prepare(
       `INSERT OR IGNORE INTO leads (name, phone, address, website, category, search_query)
-       VALUES (@name, @phone, @address, @website, @category, @search_query)`
+       VALUES (?, ?, ?, ?, ?, ?)`
     )
-    .run(lead);
+    .run(lead.name, lead.phone, lead.address, lead.website, lead.category, lead.search_query);
 }
 
 export function getPendingLeads(limit = 100, noWebsiteOnly = true) {
