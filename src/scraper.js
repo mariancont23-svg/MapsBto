@@ -6,23 +6,24 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms + Math.random() * 1000
 
 function cleanPhone(raw, countryCode) {
   let digits = raw.replace(/[^\d+]/g, '');
-
-  // If it starts with 00, replace with +
   if (digits.startsWith('00')) digits = '+' + digits.slice(2);
-
-  // If no country code prefix, add the configured one
   if (!digits.startsWith('+')) {
-    // Drop leading 0 (local trunk prefix) if present
     if (digits.startsWith('0')) digits = digits.slice(1);
     digits = '+' + countryCode + digits;
   }
-
   return digits;
+}
+
+// Extract the unique place ID from a Google Maps URL to deduplicate results
+function placeIdFromUrl(href) {
+  const match = href.match(/place\/[^/]+\/([^/?]+)/);
+  return match ? match[1] : href;
 }
 
 export async function scrapeGoogleMaps(keyword, location) {
   const query = `${keyword} în ${location}`;
   console.log(`\n🔍 Searching Google Maps for: "${query}"`);
+  console.log(`   Target: ${config.maxLeads} leads without a website\n`);
 
   const browser = await chromium.launch({
     headless: config.scraperHeadless,
@@ -53,7 +54,9 @@ export async function scrapeGoogleMaps(keyword, location) {
       await sleep(1000);
     }
 
-    // Scroll the results feed to load more listings
+    // Scroll until we have enough listings to work with
+    // We load more than maxLeads because some will have websites and be skipped
+    const targetScroll = config.maxLeads * 4;
     const feed = page.locator('[role="feed"]');
     let previousCount = 0;
     let stableRounds = 0;
@@ -68,33 +71,50 @@ export async function scrapeGoogleMaps(keyword, location) {
         stableRounds = 0;
         previousCount = count;
       }
-      if (count >= config.maxLeads) break;
+      if (count >= targetScroll) break;
     }
 
-    const hrefs = await page
+    // Deduplicate by place ID, not full URL (avoids ♻️ from same listing with different params)
+    const allHrefs = await page
       .locator('a[href*="/maps/place/"]')
-      .evaluateAll((els) => [...new Set(els.map((e) => e.href))]);
+      .evaluateAll((els) => els.map((e) => e.href));
 
-    console.log(`📌 Found ${hrefs.length} listings. Extracting details...\n`);
+    const seen = new Set();
+    const hrefs = allHrefs.filter((href) => {
+      const id = href.match(/place\/[^/]+\/([^/?]+)/)?.[1] ?? href;
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
 
-    for (let i = 0; i < Math.min(hrefs.length, config.maxLeads); i++) {
+    console.log(`📌 Found ${hrefs.length} unique listings. Checking for leads without a website...\n`);
+
+    for (let i = 0; i < hrefs.length && leadsFound < config.maxLeads; i++) {
       try {
         await page.goto(hrefs[i], { waitUntil: 'domcontentloaded', timeout: 20000 });
         await sleep(config.scrapeDelayMs);
 
-        // Business name
         const name = await page.locator('h1').first().textContent({ timeout: 5000 }).catch(() => '');
 
-        // Phone — Google Maps stores it as a tel: link or data-item-id
-        let phone = '';
+        // Skip immediately if the business has a website — no need to extract phone
+        const website = await page
+          .locator('a[data-item-id^="authority"]')
+          .first()
+          .getAttribute('href')
+          .catch(() => '');
 
+        if (website) {
+          console.log(`  ⏭  Has website — ${name.trim()}`);
+          continue;
+        }
+
+        // Phone
+        let phone = '';
         const telLink = page.locator('a[href^="tel:"]').first();
         if (await telLink.isVisible({ timeout: 3000 }).catch(() => false)) {
           const href = await telLink.getAttribute('href');
           phone = href?.replace('tel:', '') ?? '';
         }
-
-        // Fallback: data-item-id attribute
         if (!phone) {
           const phoneEl = page.locator('[data-item-id^="phone:tel:"]').first();
           if (await phoneEl.isVisible({ timeout: 2000 }).catch(() => false)) {
@@ -104,27 +124,18 @@ export async function scrapeGoogleMaps(keyword, location) {
         }
 
         if (!phone) {
-          console.log(`  [${i + 1}/${hrefs.length}] ⏭  No phone — ${name.trim() || hrefs[i]}`);
+          console.log(`  ⏭  No phone — ${name.trim()}`);
           continue;
         }
 
         const cleanedPhone = cleanPhone(phone, config.countryCode);
 
-        // Address
         const address = await page
           .locator('[data-item-id="address"]')
           .first()
           .textContent({ timeout: 2000 })
           .catch(() => '');
 
-        // Website
-        const website = await page
-          .locator('a[data-item-id^="authority"]')
-          .first()
-          .getAttribute('href')
-          .catch(() => '');
-
-        // Category
         const category = await page
           .locator('button[jsaction*="category"]')
           .first()
@@ -135,7 +146,7 @@ export async function scrapeGoogleMaps(keyword, location) {
           name: name.trim(),
           phone: cleanedPhone,
           address: address.trim(),
-          website: website?.trim() ?? '',
+          website: '',
           category: category.trim(),
           search_query: query,
         };
@@ -143,18 +154,16 @@ export async function scrapeGoogleMaps(keyword, location) {
         const result = insertLead(lead);
         if (result.changes > 0) {
           leadsFound++;
-          const siteTag = lead.website ? ' 🌐' : ' ✗ no website';
-          console.log(`  [${i + 1}/${hrefs.length}] ✅ ${lead.name} — ${lead.phone}${siteTag}`);
-        } else {
-          console.log(`  [${i + 1}/${hrefs.length}] ♻️  Already exists — ${lead.name}`);
+          console.log(`  [${leadsFound}/${config.maxLeads}] ✅ ${lead.name} — ${lead.phone}`);
         }
+        // Silently skip duplicates — they're already in the DB from a previous search
       } catch (err) {
-        console.log(`  [${i + 1}/${hrefs.length}] ❌ Error: ${err.message.slice(0, 80)}`);
+        console.log(`  ❌ Error: ${err.message.slice(0, 80)}`);
       }
     }
 
     logSearch(keyword, location, leadsFound);
-    console.log(`\n✅ Scraping done. ${leadsFound} new leads added to database.`);
+    console.log(`\n✅ Done. ${leadsFound} new leads without a website saved.`);
   } finally {
     await browser.close();
   }
