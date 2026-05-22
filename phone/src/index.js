@@ -2,7 +2,7 @@ import { program } from 'commander';
 import chalk from 'chalk';
 import { searchPlaces } from './places.js';
 import { startWhatsAppBot } from './whatsapp.js';
-import { getAllLeads, getStats } from './database.js';
+import { getAllLeads, getStats, resetLeads } from './database.js';
 
 program
   .name('mapsbto-phone')
@@ -95,6 +95,17 @@ program
       );
     });
     console.log();
+  });
+
+// ── RESET ───────────────────────────────────────────────────────────────────
+program
+  .command('reset')
+  .description('Reset leads back to pending so they can be sent again')
+  .option('--all', 'Reset ALL leads including already-sent ones (default: only failed)')
+  .action((opts) => {
+    const result = resetLeads(opts.all);
+    const scope = opts.all ? 'all' : 'failed';
+    console.log(chalk.green(`✅ Reset ${result.changes} ${scope} leads back to pending.`));
   });
 
 program.parse();

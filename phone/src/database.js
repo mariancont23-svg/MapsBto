@@ -78,6 +78,13 @@ export function getStats() {
     .get();
 }
 
+export function resetLeads(all = false) {
+  const where = all ? `status != 'pending'` : `status = 'failed'`;
+  return db
+    .prepare(`UPDATE leads SET status = 'pending', message_sent = NULL, sent_at = NULL WHERE ${where}`)
+    .run();
+}
+
 export function logSearch(keyword, location, leadsFound) {
   db.prepare(`INSERT INTO searches (keyword, location, leads_found) VALUES (?, ?, ?)`).run(
     keyword,

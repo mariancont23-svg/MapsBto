@@ -9,7 +9,8 @@
     "scrape": "node src/index.js scrape",
     "send": "node src/index.js send",
     "leads": "node src/index.js leads",
-    "run:auto": "node src/index.js run"
+    "run:auto": "node src/index.js run",
+    "reset": "node src/index.js reset"
   },
   "dependencies": {
     "@whiskeysockets/baileys": "^6.7.9",

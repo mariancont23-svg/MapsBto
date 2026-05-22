@@ -23,11 +23,10 @@ function formatMessage(template, lead) {
 }
 
 function toJid(phone) {
-  // Baileys format: digits only (no +) + @s.whatsapp.net
   return phone.replace(/\D/g, '') + '@s.whatsapp.net';
 }
 
-export async function startWhatsAppBot(limit = 50) {
+async function createConnection(limit, attempt, maxAttempts) {
   const { state, saveCreds } = await useMultiFileAuthState(config.sessionPath);
   const { version } = await fetchLatestBaileysVersion();
 
@@ -36,32 +35,36 @@ export async function startWhatsAppBot(limit = 50) {
 
     const sock = makeWASocket({
       version,
-      logger: pino({ level: 'silent' }), // suppress noisy Baileys logs
+      logger: pino({ level: 'silent' }),
       auth: {
         creds: state.creds,
         keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })),
       },
-      printQRInTerminal: false, // we handle QR ourselves
+      printQRInTerminal: false,
       browser: ['MapsBto', 'Chrome', '124.0.0'],
+      // Keep connection alive
+      keepAliveIntervalMs: 10_000,
+      retryRequestDelayMs: 2_000,
     });
 
     sock.ev.on('creds.update', saveCreds);
 
     sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
       if (qr) {
-        console.log('\n📱 Scan this QR code with WhatsApp Business:\n');
-        qrcode.generate(qr, { small: true });
-        console.log('\n⏳ Waiting for scan...\n');
+        if (attempt === 1) {
+          console.log('\n📱 Scan this QR code with WhatsApp Business:\n');
+          qrcode.generate(qr, { small: true });
+          console.log('\n⏳ Waiting for scan...\n');
+        }
       }
 
       if (connection === 'open') {
         if (ready) return;
         ready = true;
-
         console.log('🤖 WhatsApp connected!\n');
         try {
           const result = await sendPendingLeads(sock, limit);
-          await sock.logout().catch(() => {});
+          await sock.end().catch(() => {});
           resolve(result);
         } catch (err) {
           reject(err);
@@ -69,17 +72,43 @@ export async function startWhatsAppBot(limit = 50) {
       }
 
       if (connection === 'close') {
-        const reason = new Boom(lastDisconnect?.error)?.output?.statusCode;
-        if (reason === DisconnectReason.loggedOut) {
-          console.error('❌ Logged out from WhatsApp. Delete the sessions/ folder and try again.');
+        const statusCode = new Boom(lastDisconnect?.error)?.output?.statusCode;
+        const loggedOut = statusCode === DisconnectReason.loggedOut;
+
+        if (loggedOut) {
+          console.error('\n❌ Logged out. Delete the sessions/ folder and try again.');
           reject(new Error('Logged out'));
-        } else if (!ready) {
-          console.error('❌ Connection closed:', lastDisconnect?.error?.message);
-          reject(new Error('Connection closed before ready'));
+          return;
         }
+
+        if (!ready) {
+          // Stream error before connection was ready — caller will retry
+          reject(new Error(`stream_error:${statusCode}`));
+        }
+        // If ready=true, messages were already sent — resolve normally handled above
       }
     });
   });
+}
+
+export async function startWhatsAppBot(limit = 50) {
+  const MAX_RETRIES = 4;
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      return await createConnection(limit, attempt, MAX_RETRIES);
+    } catch (err) {
+      if (err.message === 'Logged out') throw err;
+
+      if (attempt < MAX_RETRIES) {
+        const wait = attempt * 4000;
+        console.log(`\n🔄 Connection dropped — retrying in ${wait / 1000}s (attempt ${attempt + 1}/${MAX_RETRIES})...`);
+        await sleep(wait);
+      } else {
+        throw new Error(`Could not connect after ${MAX_RETRIES} attempts. Try running npm run send again.`);
+      }
+    }
+  }
 }
 
 async function sendPendingLeads(sock, limit) {
@@ -99,7 +128,6 @@ async function sendPendingLeads(sock, limit) {
     const message = formatMessage(config.messageTemplate, lead);
 
     try {
-      // Check if the number exists on WhatsApp
       const [result] = await sock.onWhatsApp(lead.phone.replace(/\D/g, ''));
       if (!result?.exists) {
         console.log(`⏭  ${lead.name} (${lead.phone}) — not on WhatsApp`);
