@@ -2,7 +2,7 @@ import { program } from 'commander';
 import chalk from 'chalk';
 import { searchPlaces } from './places.js';
 import { startWhatsAppBot } from './whatsapp.js';
-import { getAllLeads, getStats, resetLeads } from './database.js';
+import { getAllLeads, getStats, resetLeads, clearLeads } from './database.js';
 
 program
   .name('mapsbto-phone')
@@ -131,6 +131,16 @@ program
 
     const after = getStats();
     console.log(`   Pending: ${chalk.yellow.bold(after.pending)}  Sent: ${chalk.green.bold(after.sent)}  Failed: ${chalk.red.bold(after.failed)}\n`);
+  });
+
+// ── CLEAR ───────────────────────────────────────────────────────────────────
+program
+  .command('clear')
+  .description('Delete ALL leads from the database and start fresh')
+  .action(() => {
+    const { total } = getStats();
+    const result = clearLeads();
+    console.log(chalk.green(`\n✅ Deleted ${Number(result.changes)} leads. Database is empty.\n`));
   });
 
 program.parse();

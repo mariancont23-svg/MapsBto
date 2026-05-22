@@ -83,6 +83,10 @@ export function getStats() {
     .get();
 }
 
+export function clearLeads() {
+  return db.prepare(`DELETE FROM leads`).run();
+}
+
 export function resetLeads(all = false) {
   const where = all ? `status != 'pending'` : `status = 'failed'`;
   return db
