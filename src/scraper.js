@@ -21,7 +21,7 @@ function cleanPhone(raw, countryCode) {
 }
 
 export async function scrapeGoogleMaps(keyword, location) {
-  const query = `${keyword} en ${location}`;
+  const query = `${keyword} in ${location}`;
   console.log(`\n🔍 Searching Google Maps for: "${query}"`);
 
   const browser = await chromium.launch({

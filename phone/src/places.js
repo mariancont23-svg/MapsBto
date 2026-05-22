@@ -30,7 +30,7 @@ function normalisePhone(raw, countryCode) {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export async function searchPlaces(keyword, location) {
-  const query = `${keyword} en ${location}`;
+  const query = `${keyword} in ${location}`;
   console.log(`\n🔍 Searching Google Places for: "${query}"`);
 
   let allResults = [];
