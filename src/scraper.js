@@ -21,18 +21,18 @@ function cleanPhone(raw, countryCode) {
 }
 
 export async function scrapeGoogleMaps(keyword, location) {
-  const query = `${keyword} in ${location}`;
+  const query = `${keyword} în ${location}`;
   console.log(`\n🔍 Searching Google Maps for: "${query}"`);
 
   const browser = await chromium.launch({
     headless: config.scraperHeadless,
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--lang=en-US'],
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--lang=ro-RO'],
   });
 
   const context = await browser.newContext({
     userAgent:
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-    locale: 'en-US',
+    locale: 'ro-RO',
     viewport: { width: 1280, height: 800 },
   });
 
@@ -47,7 +47,7 @@ export async function scrapeGoogleMaps(keyword, location) {
     await sleep(3000);
 
     // Accept cookies if prompted (EU)
-    const acceptBtn = page.getByRole('button', { name: /accept all|accept/i });
+    const acceptBtn = page.getByRole('button', { name: /accept all|acceptați tot|acceptati tot/i });
     if (await acceptBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await acceptBtn.click();
       await sleep(1000);
