@@ -40,9 +40,10 @@ export function insertLead(lead) {
     .run(lead);
 }
 
-export function getPendingLeads(limit = 100) {
+export function getPendingLeads(limit = 100, noWebsiteOnly = true) {
+  const websiteFilter = noWebsiteOnly ? `AND (website IS NULL OR website = '')` : '';
   return db
-    .prepare(`SELECT * FROM leads WHERE status = 'pending' ORDER BY created_at ASC LIMIT ?`)
+    .prepare(`SELECT * FROM leads WHERE status = 'pending' ${websiteFilter} ORDER BY created_at ASC LIMIT ?`)
     .all(limit);
 }
 
@@ -60,9 +61,7 @@ export function markLeadFailed(id, reason) {
 }
 
 export function getAllLeads(limit = 50) {
-  return db
-    .prepare(`SELECT * FROM leads ORDER BY created_at DESC LIMIT ?`)
-    .all(limit);
+  return db.prepare(`SELECT * FROM leads ORDER BY created_at DESC LIMIT ?`).all(limit);
 }
 
 export function getStats() {
@@ -72,16 +71,31 @@ export function getStats() {
         COUNT(*) as total,
         SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
         SUM(CASE WHEN status = 'sent'    THEN 1 ELSE 0 END) as sent,
-        SUM(CASE WHEN status = 'failed'  THEN 1 ELSE 0 END) as failed
+        SUM(CASE WHEN status = 'failed'  THEN 1 ELSE 0 END) as failed,
+        SUM(CASE WHEN (website IS NULL OR website = '') THEN 1 ELSE 0 END) as no_website,
+        SUM(CASE WHEN website != '' AND website IS NOT NULL THEN 1 ELSE 0 END) as has_website
        FROM leads`
     )
     .get();
 }
 
+export function resetLeads(all = false) {
+  const where = all ? `status != 'pending'` : `status = 'failed'`;
+  return db
+    .prepare(`UPDATE leads SET status = 'pending', message_sent = NULL, sent_at = NULL WHERE ${where}`)
+    .run();
+}
+
+export function clearLeads() {
+  return db.prepare(`DELETE FROM leads`).run();
+}
+
 export function logSearch(keyword, location, leadsFound) {
-  db.prepare(
-    `INSERT INTO searches (keyword, location, leads_found) VALUES (?, ?, ?)`
-  ).run(keyword, location, leadsFound);
+  db.prepare(`INSERT INTO searches (keyword, location, leads_found) VALUES (?, ?, ?)`).run(
+    keyword,
+    location,
+    leadsFound
+  );
 }
 
 export default db;
