@@ -26,13 +26,13 @@ export async function scrapeGoogleMaps(keyword, location) {
 
   const browser = await chromium.launch({
     headless: config.scraperHeadless,
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--lang=es-ES'],
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--lang=en-US'],
   });
 
   const context = await browser.newContext({
     userAgent:
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-    locale: 'es-ES',
+    locale: 'en-US',
     viewport: { width: 1280, height: 800 },
   });
 
@@ -47,7 +47,7 @@ export async function scrapeGoogleMaps(keyword, location) {
     await sleep(3000);
 
     // Accept cookies if prompted (EU)
-    const acceptBtn = page.getByRole('button', { name: /accept all|aceptar todo/i });
+    const acceptBtn = page.getByRole('button', { name: /accept all|accept/i });
     if (await acceptBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await acceptBtn.click();
       await sleep(1000);
@@ -143,7 +143,8 @@ export async function scrapeGoogleMaps(keyword, location) {
         const result = insertLead(lead);
         if (result.changes > 0) {
           leadsFound++;
-          console.log(`  [${i + 1}/${hrefs.length}] ✅ ${lead.name} — ${lead.phone}`);
+          const siteTag = lead.website ? ' 🌐' : ' ✗ no website';
+          console.log(`  [${i + 1}/${hrefs.length}] ✅ ${lead.name} — ${lead.phone}${siteTag}`);
         } else {
           console.log(`  [${i + 1}/${hrefs.length}] ♻️  Already exists — ${lead.name}`);
         }
