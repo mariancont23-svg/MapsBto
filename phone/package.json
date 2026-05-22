@@ -1,0 +1,25 @@
+{
+  "name": "mapsbto-phone",
+  "version": "1.0.0",
+  "description": "Google Maps → WhatsApp lead bot — Termux/phone edition (no browser needed)",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "scrape": "node src/index.js scrape",
+    "send": "node src/index.js send",
+    "leads": "node src/index.js leads"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.9",
+    "better-sqlite3": "^9.4.3",
+    "chalk": "^5.3.0",
+    "commander": "^11.1.0",
+    "dotenv": "^16.4.5",
+    "pino": "^9.2.0",
+    "qrcode-terminal": "^0.12.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
