@@ -103,9 +103,25 @@ program
   .description('Reset leads back to pending so they can be sent again')
   .option('--all', 'Reset ALL leads including already-sent ones (default: only failed)')
   .action((opts) => {
+    const before = getStats();
     const result = resetLeads(opts.all);
-    const scope = opts.all ? 'all' : 'failed';
-    console.log(chalk.green(`✅ Reset ${result.changes} ${scope} leads back to pending.`));
+    const changed = Number(result.changes);
+
+    if (changed === 0) {
+      if (Number(before.pending) > 0) {
+        console.log(chalk.yellow(`\nℹ️  No failed leads to reset — but ${before.pending} leads are already pending.`));
+        console.log(chalk.dim('   Just run: npm run send\n'));
+      } else {
+        console.log(chalk.yellow('\nℹ️  No leads to reset. Run npm run scrape first.\n'));
+      }
+    } else {
+      const scope = opts.all ? 'leads' : 'failed leads';
+      console.log(chalk.green(`\n✅ Reset ${changed} ${scope} back to pending.`));
+      console.log(chalk.dim('   Run: npm run send\n'));
+    }
+
+    const after = getStats();
+    console.log(`   Pending: ${chalk.yellow.bold(after.pending)}  Sent: ${chalk.green.bold(after.sent)}  Failed: ${chalk.red.bold(after.failed)}\n`);
   });
 
 program.parse();
