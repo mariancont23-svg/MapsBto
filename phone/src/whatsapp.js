@@ -26,7 +26,7 @@ function toJid(phone) {
   return phone.replace(/\D/g, '') + '@s.whatsapp.net';
 }
 
-async function createConnection(limit, attempt, maxAttempts) {
+async function createConnection(limit, noWebsiteOnly, attempt, maxAttempts) {
   const { state, saveCreds } = await useMultiFileAuthState(config.sessionPath);
   const { version } = await fetchLatestBaileysVersion();
 
@@ -63,7 +63,7 @@ async function createConnection(limit, attempt, maxAttempts) {
         ready = true;
         console.log('🤖 WhatsApp connected!\n');
         try {
-          const result = await sendPendingLeads(sock, limit);
+          const result = await sendPendingLeads(sock, limit, noWebsiteOnly);
           await sock.end().catch(() => {});
           resolve(result);
         } catch (err) {
@@ -91,12 +91,12 @@ async function createConnection(limit, attempt, maxAttempts) {
   });
 }
 
-export async function startWhatsAppBot(limit = 50) {
+export async function startWhatsAppBot(limit = 50, noWebsiteOnly = true) {
   const MAX_RETRIES = 4;
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      return await createConnection(limit, attempt, MAX_RETRIES);
+      return await createConnection(limit, noWebsiteOnly, attempt, MAX_RETRIES);
     } catch (err) {
       if (err.message === 'Logged out') throw err;
 
@@ -111,15 +111,16 @@ export async function startWhatsAppBot(limit = 50) {
   }
 }
 
-async function sendPendingLeads(sock, limit) {
-  const leads = getPendingLeads(limit);
+async function sendPendingLeads(sock, limit, noWebsiteOnly) {
+  const leads = getPendingLeads(limit, noWebsiteOnly);
+  const filterNote = noWebsiteOnly ? ' (no website only)' : '';
 
   if (leads.length === 0) {
-    console.log('📭 No pending leads. Run `npm run scrape` first.');
+    console.log('📭 No pending leads without a website. Run `npm run scrape` or use --with-website to include all.');
     return { sent: 0, failed: 0 };
   }
 
-  console.log(`📋 Sending messages to ${leads.length} leads...\n`);
+  console.log(`📋 Sending messages to ${leads.length} leads${filterNote}...\n`);
   let sent = 0;
   let failed = 0;
 

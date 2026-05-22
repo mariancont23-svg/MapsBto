@@ -42,9 +42,12 @@ export function insertLead(lead) {
     .run(lead.name, lead.phone, lead.address, lead.website, lead.category, lead.place_id, lead.search_query);
 }
 
-export function getPendingLeads(limit = 100) {
+export function getPendingLeads(limit = 100, noWebsiteOnly = true) {
+  const websiteFilter = noWebsiteOnly
+    ? `AND (website IS NULL OR website = '')`
+    : '';
   return db
-    .prepare(`SELECT * FROM leads WHERE status = 'pending' ORDER BY created_at ASC LIMIT ?`)
+    .prepare(`SELECT * FROM leads WHERE status = 'pending' ${websiteFilter} ORDER BY created_at ASC LIMIT ?`)
     .all(limit);
 }
 
@@ -72,7 +75,9 @@ export function getStats() {
          COUNT(*) as total,
          SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
          SUM(CASE WHEN status = 'sent'    THEN 1 ELSE 0 END) as sent,
-         SUM(CASE WHEN status = 'failed'  THEN 1 ELSE 0 END) as failed
+         SUM(CASE WHEN status = 'failed'  THEN 1 ELSE 0 END) as failed,
+         SUM(CASE WHEN (website IS NULL OR website = '') THEN 1 ELSE 0 END) as no_website,
+         SUM(CASE WHEN website != '' AND website IS NOT NULL THEN 1 ELSE 0 END) as has_website
        FROM leads`
     )
     .get();

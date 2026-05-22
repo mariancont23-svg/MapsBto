@@ -29,11 +29,14 @@ program
 // ── SEND ────────────────────────────────────────────────────────────────────
 program
   .command('send')
-  .description('Connect WhatsApp and send messages to all pending leads')
+  .description('Connect WhatsApp and send messages to pending leads without a website')
   .option('-n, --number <number>', 'Max messages to send this session', '50')
+  .option('--with-website', 'Also message businesses that already have a website')
   .action(async (opts) => {
+    const noWebsiteOnly = !opts.withWebsite;
+    if (noWebsiteOnly) console.log(chalk.dim('  Filtering: businesses without a website only\n'));
     try {
-      await startWhatsAppBot(parseInt(opts.number));
+      await startWhatsAppBot(parseInt(opts.number), noWebsiteOnly);
     } catch (err) {
       console.error(chalk.red('\n❌ WhatsApp error:'), err.message);
       process.exit(1);
@@ -43,12 +46,14 @@ program
 // ── RUN (scrape + send in one go) ───────────────────────────────────────────
 program
   .command('run')
-  .description('Scrape Google Maps then immediately send WhatsApp messages to all new leads')
+  .description('Scrape Google Maps then immediately send WhatsApp messages to leads without a website')
   .requiredOption('-k, --keyword <keyword>', 'Type of business  (e.g. "restaurantes", "dentistas")')
   .requiredOption('-l, --location <location>', 'City or area      (e.g. "Madrid", "Bogotá centro")')
   .option('-m, --max <number>', 'Max leads to collect and message', '50')
+  .option('--with-website', 'Also message businesses that already have a website')
   .action(async (opts) => {
     process.env.MAX_LEADS = opts.max;
+    const noWebsiteOnly = !opts.withWebsite;
     try {
       console.log(chalk.bold('\n── Step 1 / 2 — Scraping Google Maps ───────────'));
       const found = await searchPlaces(opts.keyword, opts.location);
@@ -59,7 +64,8 @@ program
       }
 
       console.log(chalk.bold('\n── Step 2 / 2 — Sending WhatsApp messages ──────'));
-      await startWhatsAppBot(parseInt(opts.max));
+      if (noWebsiteOnly) console.log(chalk.dim('  Filtering: businesses without a website only\n'));
+      await startWhatsAppBot(parseInt(opts.max), noWebsiteOnly);
     } catch (err) {
       console.error(chalk.red('\n❌ Error:'), err.message);
       process.exit(1);
@@ -75,10 +81,12 @@ program
     const stats = getStats();
 
     console.log(chalk.bold('\n── Lead Statistics ─────────────────'));
-    console.log(`  Total    ${chalk.white.bold(stats.total)}`);
-    console.log(`  Pending  ${chalk.yellow.bold(stats.pending)}`);
-    console.log(`  Sent     ${chalk.green.bold(stats.sent)}`);
-    console.log(`  Failed   ${chalk.red.bold(stats.failed)}`);
+    console.log(`  Total        ${chalk.white.bold(stats.total)}`);
+    console.log(`  No website   ${chalk.cyan.bold(stats.no_website)}  ← your targets`);
+    console.log(`  Has website  ${chalk.dim(stats.has_website)}`);
+    console.log(`  Pending      ${chalk.yellow.bold(stats.pending)}`);
+    console.log(`  Sent         ${chalk.green.bold(stats.sent)}`);
+    console.log(`  Failed       ${chalk.red.bold(stats.failed)}`);
     console.log('────────────────────────────────────\n');
 
     const leads = getAllLeads(parseInt(opts.number));
@@ -90,11 +98,12 @@ program
     const statusColor = { pending: chalk.yellow, sent: chalk.green, failed: chalk.red };
     leads.forEach((l) => {
       const color = statusColor[l.status] || chalk.white;
+      const site = l.website ? chalk.dim('🌐') : chalk.cyan('✗');
       console.log(
-        `  ${color(l.status.padEnd(8))}  ${l.name.slice(0, 28).padEnd(28)}  ${l.phone}`
+        `  ${color(l.status.padEnd(8))}  ${site}  ${l.name.slice(0, 26).padEnd(26)}  ${l.phone}`
       );
     });
-    console.log();
+    console.log(chalk.dim('\n  🌐 = has website   ✗ = no website (your targets)\n'));
   });
 
 // ── RESET ───────────────────────────────────────────────────────────────────
