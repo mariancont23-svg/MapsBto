@@ -14,18 +14,23 @@ function buildWaLink(phone, message) {
   return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
 }
 
+function buildMapsLink(lead) {
+  const q = encodeURIComponent(`${lead.name} ${lead.address || ''}`);
+  return `https://www.google.com/maps/search/?api=1&query=${q}`;
+}
+
 function buildEmbed(lead) {
   const message = buildMessage(lead);
   const waLink = buildWaLink(lead.phone, message);
+  const mapsLink = buildMapsLink(lead);
 
   return {
     title: `🏢 ${lead.name}`,
     color: 0x25D366,
-    description: `### [📲 Click here to send WhatsApp message](${waLink})`,
+    description: `[📲 WhatsApp](${waLink})  •  [📍 Google Maps](${mapsLink})`,
     fields: [
-      { name: '📞 Phone',    value: lead.phone,            inline: true  },
-      { name: '🏷️ Category', value: lead.category || '—',  inline: true  },
-      { name: '📍 Address',  value: lead.address  || '—',  inline: false },
+      { name: '📞 Phone',    value: lead.phone,           inline: true },
+      { name: '🏷️ Category', value: lead.category || '—', inline: true },
     ],
     footer: { text: 'Found on Google Maps • No website' },
     timestamp: new Date().toISOString(),
