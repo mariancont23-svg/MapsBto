@@ -1,0 +1,17 @@
+{
+  "name": "mapsbto-bot",
+  "version": "1.0.0",
+  "description": "Discord bot — scrape Google Maps leads via chat commands",
+  "type": "module",
+  "main": "src/bot.js",
+  "scripts": {
+    "start": "node src/bot.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.15.3",
+    "dotenv": "^16.4.5"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}
