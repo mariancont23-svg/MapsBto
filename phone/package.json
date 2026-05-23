@@ -10,6 +10,7 @@
     "send": "node src/index.js send",
     "leads": "node src/index.js leads",
     "run:auto": "node src/index.js run",
+    "discord": "node src/index.js discord",
     "reset": "node src/index.js reset",
     "clear": "node src/index.js clear"
   },

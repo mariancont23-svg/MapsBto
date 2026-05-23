@@ -1,4 +1,5 @@
 import { insertLead, logSearch } from './database.js';
+import { postLeadToDiscord } from './discord.js';
 import config from './config.js';
 
 const PLACES_BASE = 'https://maps.googleapis.com/maps/api/place';
@@ -92,6 +93,7 @@ export async function searchPlaces(keyword, location) {
       if (result.changes > 0) {
         newLeads++;
         console.log(`  [${i + 1}/${slice.length}] ✅ ${lead.name} — ${lead.phone}`);
+        await postLeadToDiscord(lead);
       } else {
         console.log(`  [${i + 1}/${slice.length}] ♻️  Already exists — ${lead.name}`);
       }

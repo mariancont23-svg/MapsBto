@@ -9,7 +9,8 @@ if (!process.env.GOOGLE_PLACES_API_KEY || process.env.GOOGLE_PLACES_API_KEY === 
 
 export default {
   placesApiKey: process.env.GOOGLE_PLACES_API_KEY,
-  countryCode: process.env.COUNTRY_CODE || '34',
+  countryCode: process.env.COUNTRY_CODE || '40',
+  discordWebhook: process.env.DISCORD_WEBHOOK_URL || '',
   messageDelayMs: parseInt(process.env.MESSAGE_DELAY_MS) || 18000,
   maxLeads: parseInt(process.env.MAX_LEADS) || 50,
   sessionPath: './sessions',

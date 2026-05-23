@@ -2,7 +2,8 @@ import { program } from 'commander';
 import chalk from 'chalk';
 import { scrapeGoogleMaps } from './scraper.js';
 import { startWhatsAppBot } from './whatsapp.js';
-import { getAllLeads, getStats, resetLeads, clearLeads } from './database.js';
+import { postAllToDiscord } from './discord.js';
+import { getAllLeads, getPendingLeads, getStats, resetLeads, clearLeads } from './database.js';
 
 program
   .name('mapsbto')
@@ -130,6 +131,19 @@ program
 
     const after = getStats();
     console.log(`   Pending: ${chalk.yellow.bold(after.pending)}  Sent: ${chalk.green.bold(after.sent)}  Failed: ${chalk.red.bold(after.failed)}\n`);
+  });
+
+// ── DISCORD ─────────────────────────────────────────────────────────────────
+program
+  .command('discord')
+  .description('Post all pending leads to Discord with a WhatsApp link for each')
+  .action(async () => {
+    const leads = getPendingLeads(1000, false);
+    if (!leads.length) {
+      console.log(chalk.yellow('\nNo pending leads. Run npm run scrape first.\n'));
+      return;
+    }
+    await postAllToDiscord(leads);
   });
 
 // ── CLEAR ───────────────────────────────────────────────────────────────────

@@ -1,5 +1,6 @@
 import { chromium } from 'playwright';
 import { insertLead, logSearch } from './database.js';
+import { postLeadToDiscord } from './discord.js';
 import config from './config.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms + Math.random() * 1000));
@@ -155,6 +156,7 @@ export async function scrapeGoogleMaps(keyword, location) {
         if (result.changes > 0) {
           leadsFound++;
           console.log(`  [${leadsFound}/${config.maxLeads}] ✅ ${lead.name} — ${lead.phone}`);
+          await postLeadToDiscord(lead);
         }
         // Silently skip duplicates — they're already in the DB from a previous search
       } catch (err) {

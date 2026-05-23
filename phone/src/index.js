@@ -2,7 +2,8 @@ import { program } from 'commander';
 import chalk from 'chalk';
 import { searchPlaces } from './places.js';
 import { startWhatsAppBot } from './whatsapp.js';
-import { getAllLeads, getStats, resetLeads, clearLeads } from './database.js';
+import { getAllLeads, getPendingLeads, getStats, resetLeads, clearLeads } from './database.js';
+import { postAllToDiscord } from './discord.js';
 
 program
   .name('mapsbto-phone')
@@ -104,6 +105,19 @@ program
       );
     });
     console.log(chalk.dim('\n  🌐 = has website   ✗ = no website (your targets)\n'));
+  });
+
+// ── DISCORD ─────────────────────────────────────────────────────────────────
+program
+  .command('discord')
+  .description('Post all pending leads to Discord with a WhatsApp link for each')
+  .action(async () => {
+    const leads = getPendingLeads(1000, false);
+    if (!leads.length) {
+      console.log(chalk.yellow('\nNo pending leads. Run npm run scrape first.\n'));
+      return;
+    }
+    await postAllToDiscord(leads);
   });
 
 // ── RESET ───────────────────────────────────────────────────────────────────
