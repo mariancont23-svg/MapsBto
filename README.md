@@ -1,117 +1,162 @@
-# MapsBto — Google Maps → WhatsApp Lead Bot
+# Maps WhatsApp Lead Bot
 
-Automatically find businesses on Google Maps and send them a WhatsApp Business message from your account.
+Automatically find businesses on Google Maps that **don't have a website** and send them a WhatsApp Business message — directly from your account, no third-party services needed.
+
+---
+
+## ⚠️ Legal & Ethical Disclaimer
+
+**Read this before using.**
+
+- This tool is intended for **legitimate outreach to real businesses** for services they may genuinely need.
+- You are solely responsible for how you use this software. The authors accept no liability for misuse, bans, legal issues, or damages of any kind.
+- Respect **WhatsApp's Terms of Service** — mass unsolicited messaging is a violation and can result in your number being permanently banned.
+- Respect **Google's Terms of Service** — automated scraping of Google Maps may violate their ToS. Use responsibly, with delays, and at low volume.
+- Never send misleading, deceptive, or illegal messages.
+- Always give recipients an easy way to ask you to stop.
+
+**This software is provided as-is. Use at your own risk.**
+
+---
 
 ## How it works
 
 ```
-npm run scrape -- -k "restaurantes" -l "Madrid"
+npm run scrape -- -k "restaurants" -l "New York"
          ↓
    Playwright opens Google Maps, scrolls results,
-   clicks each listing, extracts phone number + details,
-   saves everything to a local SQLite database.
+   clicks each listing, checks for a website,
+   saves only businesses WITHOUT a website to SQLite.
 
 npm run send
          ↓
    Scan QR with your WhatsApp Business phone (once).
-   Bot checks each pending lead, verifies they're on WhatsApp,
-   and sends your message with a safe delay between sends.
+   Bot verifies each number is on WhatsApp,
+   sends your message with a safe delay between sends.
 ```
+
+---
+
+## Requirements
+
+- **Node.js 22 or higher** — https://nodejs.org (download LTS)
+- **Git** — https://git-scm.com
+- **WhatsApp Business** account on your phone
+
+---
 
 ## Setup
 
-### 1. Install dependencies
-
 ```bash
+git clone YOUR_REPO_URL
+cd MapsBto
 npm install
 npx playwright install chromium
-```
-
-### 2. Configure your settings
-
-```bash
 cp .env.example .env
 ```
 
-Edit `.env`:
+Edit `.env` with your settings (see Configuration below), then you're ready.
+
+---
+
+## Configuration (`.env`)
 
 | Variable | Description | Default |
 |---|---|---|
-| `COUNTRY_CODE` | Default country code (no +). Spain=34, Colombia=57, Mexico=52 | `34` |
-| `MESSAGE_DELAY_MS` | Milliseconds between WhatsApp messages | `18000` (18s) |
-| `SCRAPE_DELAY_MS` | Milliseconds between Google Maps clicks | `2500` |
-| `MAX_LEADS` | Max businesses to scrape per search | `50` |
-| `SCRAPER_HEADLESS` | `false` = see the browser, `true` = run invisible | `false` |
-| `MESSAGE_TEMPLATE` | Your WhatsApp message. Use `{name}`, `{category}`, `{address}` | see `.env.example` |
+| `COUNTRY_CODE` | Your country code without `+` | `40` |
+| `MESSAGE_DELAY_MS` | Milliseconds between WhatsApp messages (min: 15000) | `18000` |
+| `SCRAPE_DELAY_MS` | Milliseconds between Google Maps page loads | `2500` |
+| `MAX_LEADS` | Max leads to collect per search | `50` |
+| `SCRAPER_HEADLESS` | `false` = show browser, `true` = run in background | `false` |
+| `MESSAGE_TEMPLATE` | Your outreach message. Placeholders: `{name}` `{category}` `{address}` | see `.env.example` |
 
-## Usage
+**Country codes:** Romania=40, UK=44, Germany=49, France=33, USA=1, Spain=34, Italy=39
 
-### Scrape leads from Google Maps
+---
 
-```bash
-# Basic
-npm run scrape -- -k "restaurantes" -l "Madrid"
-
-# With options
-npm run scrape -- -k "peluquerias" -l "Barcelona" --max 100
-
-# Other examples
-npm run scrape -- -k "dentistas" -l "Bogotá"
-npm run scrape -- -k "tiendas ropa" -l "Ciudad de México"
-npm run scrape -- -k "fontaneros" -l "Valencia"
-```
-
-### Send WhatsApp messages
+## Commands
 
 ```bash
+# Scrape leads from Google Maps (only saves businesses without a website)
+npm run scrape -- -k "restaurants" -l "London" --max 20
+
+# Send WhatsApp messages to all pending leads
 npm run send
-```
 
-On first run it shows a QR code — scan it with WhatsApp Business on your phone.  
-After that the session is saved and QR is not needed again.
+# Scrape + send in one command
+npm run run:auto -- -k "restaurants" -l "London" --max 20
 
-```bash
-# Limit to 20 messages in this session
-npm run send -- --number 20
-```
-
-### Check your leads
-
-```bash
+# View leads and stats
 npm run leads
+
+# Reset failed leads back to pending
+npm run reset
+
+# Delete all leads and start fresh
+npm run clear
 ```
 
-Shows stats (total / pending / sent / failed) and the most recent 30 leads.
+---
 
-## Tips to avoid WhatsApp bans
+## Avoiding bans
 
-- Keep `MESSAGE_DELAY_MS` at **18000 or higher** (18 seconds minimum between messages)
-- Don't send more than **100–150 messages per day** from one account
+### WhatsApp
 - Use a **WhatsApp Business** account, not a personal one
-- Make sure your message sounds natural — avoid spam-like phrases
-- Start with small batches (20–30) and increase gradually
+- Maximum **80 messages per day**
+- Keep `MESSAGE_DELAY_MS` at **18000 or higher** (18 seconds between messages)
+- Start slow: **10–20 messages the first day**, then increase gradually
+- Your message must sound human and natural
+- Never include spam trigger words
+
+### Google Maps
+- Maximum **3–4 searches per hour**
+- If you see a CAPTCHA, stop and wait 30 minutes before retrying
+- Don't close the browser while it's scraping
+
+---
+
+## Android (phone version)
+
+A Termux-compatible version is available in the `phone/` folder.
+It uses the **Google Places API** instead of Playwright (no browser needed)
+and **Baileys** instead of whatsapp-web.js (no Puppeteer needed).
+
+See [`phone/README.md`](phone/README.md) for setup instructions.
+
+---
 
 ## Database
 
-Leads are stored in `data/leads.db` (SQLite). Each lead has a `status`:
+Leads are stored in `data/leads.db` (SQLite, auto-created). Each lead has a status:
 
-- `pending` — not yet contacted
-- `sent` — message delivered
-- `failed` — not on WhatsApp or send error
+| Status | Meaning |
+|---|---|
+| `pending` | Not yet contacted |
+| `sent` | Message delivered |
+| `failed` | Not on WhatsApp or send error |
 
-The bot never sends to the same phone number twice (unique constraint).
+The same phone number is **never messaged twice**.
+
+---
 
 ## Project structure
 
 ```
 src/
-  index.js      CLI entry point (scrape / send / leads commands)
-  scraper.js    Playwright-based Google Maps scraper
-  whatsapp.js   whatsapp-web.js client + message sending
+  index.js      CLI — all commands
+  scraper.js    Playwright Google Maps scraper
+  whatsapp.js   WhatsApp Web client + message sending
   database.js   SQLite schema and queries
   config.js     Loads .env settings
-data/
-  leads.db      SQLite database (auto-created, gitignored)
-sessions/
-  whatsapp/     WhatsApp session files (auto-created, gitignored)
+phone/
+  src/          Android/Termux version (Places API + Baileys)
+data/           SQLite database (auto-created, gitignored)
+sessions/       WhatsApp session (auto-created, gitignored)
+TUTORIAL.md     Step-by-step guide for first-time users
 ```
+
+---
+
+## License
+
+MIT — see [LICENSE](LICENSE)

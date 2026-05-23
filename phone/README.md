@@ -26,7 +26,7 @@ Open Termux and run:
 
 ```bash
 pkg install git -y
-git clone https://github.com/mariancont23-svg/MapsBto.git
+git clone YOUR_REPO_URL
 cd MapsBto/phone
 bash setup-termux.sh
 ```
@@ -51,7 +51,7 @@ nano .env
 Set:
 ```
 GOOGLE_PLACES_API_KEY=AIza...your_key_here
-COUNTRY_CODE=34   # change to your country
+COUNTRY_CODE=40   # change to your country (40=Romania, 44=UK, 49=Germany)
 ```
 
 Save with `Ctrl+X → Y → Enter`
@@ -63,10 +63,10 @@ Save with `Ctrl+X → Y → Enter`
 ### Find leads on Google Maps
 
 ```bash
-npm run scrape -- -k "restaurantes" -l "Madrid"
-npm run scrape -- -k "peluquerias" -l "Barcelona"
-npm run scrape -- -k "dentistas" -l "Bogotá"
-npm run scrape -- -k "fontaneros" -l "Valencia" --max 30
+npm run scrape -- -k "restaurants" -l "London"
+npm run scrape -- -k "hair salons" -l "Berlin"
+npm run scrape -- -k "dentists" -l "Paris"
+npm run scrape -- -k "plumbers" -l "Rome" --max 30
 ```
 
 ### Send WhatsApp messages
