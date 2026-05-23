@@ -1,6 +1,22 @@
-# Maps WhatsApp Lead Bot
+# 🗺️ Maps WhatsApp Lead Bot
 
-Automatically find businesses on Google Maps that **don't have a website** and send them a WhatsApp Business message — directly from your account, no third-party services needed.
+> Automatically find businesses on Google Maps with **no website** and send them a WhatsApp Business message — no paid APIs, no third-party services, runs on your own machine.
+
+![Node.js](https://img.shields.io/badge/Node.js-22%2B-brightgreen?logo=node.js)
+![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Mac%20%7C%20Linux%20%7C%20Android-blue)
+![License](https://img.shields.io/badge/License-MIT-yellow)
+![WhatsApp](https://img.shields.io/badge/WhatsApp-Business-25D366?logo=whatsapp)
+
+---
+
+## What it does
+
+1. **Scrapes Google Maps** for a business type and city you choose
+2. **Filters automatically** — only saves businesses with no website (your real targets)
+3. **Sends WhatsApp messages** from your WhatsApp Business account with a personalised message
+4. **Tracks everything** in a local SQLite database — never contacts the same number twice
+
+Perfect for **web design agencies**, **freelancers**, and **digital marketing consultants** looking for cold outreach leads that actually need their service.
 
 ---
 
@@ -22,18 +38,31 @@ Automatically find businesses on Google Maps that **don't have a website** and s
 ## How it works
 
 ```
-npm run scrape -- -k "restaurants" -l "New York"
+npm run scrape -- -k "restaurants" -l "New York" --max 20
          ↓
    Playwright opens Google Maps, scrolls results,
-   clicks each listing, checks for a website,
+   checks each listing for a website — skips it if found,
    saves only businesses WITHOUT a website to SQLite.
 
 npm run send
          ↓
-   Scan QR with your WhatsApp Business phone (once).
-   Bot verifies each number is on WhatsApp,
-   sends your message with a safe delay between sends.
+   Scan QR with your WhatsApp Business phone (once, session saved).
+   Bot checks each number exists on WhatsApp,
+   sends your personalised message with safe delays between sends.
 ```
+
+---
+
+## Features
+
+- ✅ **Website filter** — skips businesses that already have a website during scraping
+- ✅ **Deduplication** — same phone number never contacted twice across sessions
+- ✅ **Auto-retry** — reconnects automatically if WhatsApp drops mid-session
+- ✅ **No paid API** needed for the desktop version (uses Playwright browser)
+- ✅ **Android version** included — runs in Termux with Google Places API + Baileys
+- ✅ **Configurable message** — personalise with `{name}`, `{category}`, `{address}`
+- ✅ **Safe delays** — randomised waits between messages to avoid bans
+- ✅ **Simple CLI** — scrape, send, leads, reset, clear
 
 ---
 
@@ -45,7 +74,7 @@ npm run send
 
 ---
 
-## Setup
+## Quick Start
 
 ```bash
 git clone YOUR_REPO_URL
@@ -55,7 +84,27 @@ npx playwright install chromium
 cp .env.example .env
 ```
 
-Edit `.env` with your settings (see Configuration below), then you're ready.
+Edit `.env` with your country code and message, then:
+
+```bash
+npm run scrape -- -k "restaurants" -l "London" --max 20
+npm run send
+```
+
+Full setup guide: [TUTORIAL.md](TUTORIAL.md)
+
+---
+
+## Commands
+
+| Command | Description |
+|---|---|
+| `npm run scrape -- -k "type" -l "city"` | Find leads on Google Maps |
+| `npm run send` | Send WhatsApp messages to all pending leads |
+| `npm run run:auto -- -k "type" -l "city"` | Scrape + send in one command |
+| `npm run leads` | View all leads and stats |
+| `npm run reset` | Reset failed leads back to pending |
+| `npm run clear` | Delete all leads and start fresh |
 
 ---
 
@@ -64,37 +113,13 @@ Edit `.env` with your settings (see Configuration below), then you're ready.
 | Variable | Description | Default |
 |---|---|---|
 | `COUNTRY_CODE` | Your country code without `+` | `40` |
-| `MESSAGE_DELAY_MS` | Milliseconds between WhatsApp messages (min: 15000) | `18000` |
-| `SCRAPE_DELAY_MS` | Milliseconds between Google Maps page loads | `2500` |
-| `MAX_LEADS` | Max leads to collect per search | `50` |
-| `SCRAPER_HEADLESS` | `false` = show browser, `true` = run in background | `false` |
-| `MESSAGE_TEMPLATE` | Your outreach message. Placeholders: `{name}` `{category}` `{address}` | see `.env.example` |
+| `MESSAGE_DELAY_MS` | Milliseconds between messages (min: 15000) | `18000` |
+| `SCRAPE_DELAY_MS` | Milliseconds between page loads | `2500` |
+| `MAX_LEADS` | Max no-website leads to collect per search | `50` |
+| `SCRAPER_HEADLESS` | `false` = visible browser, `true` = background | `false` |
+| `MESSAGE_TEMPLATE` | Outreach message. Use `{name}` `{category}` `{address}` | see `.env.example` |
 
 **Country codes:** Romania=40, UK=44, Germany=49, France=33, USA=1, Spain=34, Italy=39
-
----
-
-## Commands
-
-```bash
-# Scrape leads from Google Maps (only saves businesses without a website)
-npm run scrape -- -k "restaurants" -l "London" --max 20
-
-# Send WhatsApp messages to all pending leads
-npm run send
-
-# Scrape + send in one command
-npm run run:auto -- -k "restaurants" -l "London" --max 20
-
-# View leads and stats
-npm run leads
-
-# Reset failed leads back to pending
-npm run reset
-
-# Delete all leads and start fresh
-npm run clear
-```
 
 ---
 
@@ -103,39 +128,24 @@ npm run clear
 ### WhatsApp
 - Use a **WhatsApp Business** account, not a personal one
 - Maximum **80 messages per day**
-- Keep `MESSAGE_DELAY_MS` at **18000 or higher** (18 seconds between messages)
-- Start slow: **10–20 messages the first day**, then increase gradually
-- Your message must sound human and natural
-- Never include spam trigger words
+- Keep `MESSAGE_DELAY_MS` at **18000 or higher**
+- Start with **10–20 messages your first day**, then scale up slowly
+- Write natural-sounding messages — avoid "free", "offer", "click here"
 
 ### Google Maps
 - Maximum **3–4 searches per hour**
-- If you see a CAPTCHA, stop and wait 30 minutes before retrying
-- Don't close the browser while it's scraping
+- If you see a CAPTCHA, stop and wait 30 minutes
+- Don't close the browser while scraping
 
 ---
 
-## Android (phone version)
+## Android version (no computer needed)
 
-A Termux-compatible version is available in the `phone/` folder.
-It uses the **Google Places API** instead of Playwright (no browser needed)
-and **Baileys** instead of whatsapp-web.js (no Puppeteer needed).
+A Termux-compatible version lives in the `phone/` folder. It uses:
+- **Google Places API** instead of Playwright — no browser needed
+- **Baileys** instead of whatsapp-web.js — pure WebSocket, no Puppeteer
 
-See [`phone/README.md`](phone/README.md) for setup instructions.
-
----
-
-## Database
-
-Leads are stored in `data/leads.db` (SQLite, auto-created). Each lead has a status:
-
-| Status | Meaning |
-|---|---|
-| `pending` | Not yet contacted |
-| `sent` | Message delivered |
-| `failed` | Not on WhatsApp or send error |
-
-The same phone number is **never messaged twice**.
+See [`phone/README.md`](phone/README.md) for setup.
 
 ---
 
@@ -144,15 +154,13 @@ The same phone number is **never messaged twice**.
 ```
 src/
   index.js      CLI — all commands
-  scraper.js    Playwright Google Maps scraper
-  whatsapp.js   WhatsApp Web client + message sending
+  scraper.js    Playwright-based Google Maps scraper
+  whatsapp.js   whatsapp-web.js client + sending logic
   database.js   SQLite schema and queries
-  config.js     Loads .env settings
+  config.js     .env loader
 phone/
   src/          Android/Termux version (Places API + Baileys)
-data/           SQLite database (auto-created, gitignored)
-sessions/       WhatsApp session (auto-created, gitignored)
-TUTORIAL.md     Step-by-step guide for first-time users
+TUTORIAL.md     Full step-by-step guide for first-time users
 ```
 
 ---
@@ -160,3 +168,7 @@ TUTORIAL.md     Step-by-step guide for first-time users
 ## License
 
 MIT — see [LICENSE](LICENSE)
+
+---
+
+*Keywords: whatsapp bot, google maps scraper, lead generation bot, whatsapp business automation, cold outreach tool, web design leads, google maps automation, whatsapp marketing, playwright scraper, nodejs whatsapp bot, business leads scraper, no website leads*
