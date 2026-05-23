@@ -25,14 +25,14 @@ function buildEmbed(lead) {
   const mapsLink = buildMapsLink(lead);
 
   return {
-    title: `🏢 ${lead.name}`,
+    title: lead.name,
     color: 0x25D366,
-    description: `[📲 WhatsApp](${waLink})  •  [📍 Google Maps](${mapsLink})`,
+    description: `[WhatsApp](${waLink})  •  [Google Maps](${mapsLink})`,
     fields: [
-      { name: '📞 Phone',    value: lead.phone,           inline: true },
-      { name: '🏷️ Category', value: lead.category || '—', inline: true },
+      { name: 'Phone',    value: lead.phone,           inline: true },
+      { name: 'Category', value: lead.category || '—', inline: true },
     ],
-    footer: { text: 'Found via Google Places • No website' },
+    footer: { text: 'Google Places • No website' },
     timestamp: new Date().toISOString(),
   };
 }
