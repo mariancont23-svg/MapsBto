@@ -129,30 +129,44 @@ client.on(Events.MessageCreate, async (msg) => {
       return msg.reply('No countries are in business hours right now (10am–4pm). Try `!when` to see when they open.');
     }
 
-    const country  = pickRandom(open);
-    const city     = pickRandom(country.cities);
-    const keyword  = pickRandom(country.keywords);
+    const country = pickRandom(open);
 
     if (activeScrapes.has(msg.channelId)) {
       return msg.reply('A scrape is already running in this channel. Wait for it to finish.');
     }
 
+    // Shuffle cities and keywords, then build all combos so we rotate without repeating
+    const cities   = [...country.cities].sort(() => Math.random() - 0.5);
+    const keywords = [...country.keywords].sort(() => Math.random() - 0.5);
+    const combos   = [];
+    for (const city of cities) for (const kw of keywords) combos.push({ city, kw });
+
     activeScrapes.add(msg.channelId);
+    const { city: firstCity, kw: firstKw } = combos[0];
     const status = await msg.reply(
-      `${country.flag} **${country.name}** — ${country.localTime} local\nSearching for **${keyword}** in **${city}** (max ${max})...`
+      `${country.flag} **${country.name}** — ${country.localTime} local\nSearching for **${firstKw}** in **${firstCity}** (max ${max})...`
     );
 
     let found = 0;
 
     try {
-      await searchPlaces(keyword, city, max, async (lead) => {
-        found++;
-        await msg.channel.send({ embeds: [buildEmbed(lead)] });
-      }, country.code);
+      for (const { city, kw } of combos) {
+        if (found >= max) break;
+        if (found > 0) {
+          await status.edit(
+            `${country.flag} **${country.name}** — ${country.localTime} local\n` +
+            `Found ${found} so far — also trying **${kw}** in **${city}**...`
+          );
+        }
+        await searchPlaces(kw, city, max - found, async (lead) => {
+          found++;
+          await msg.channel.send({ embeds: [buildEmbed(lead)] });
+        }, country.code);
+      }
 
       await status.edit(
         `${country.flag} **${country.name}** — ${country.localTime} local\n` +
-        `Done. Found **${found}** lead${found !== 1 ? 's' : ''} for **${keyword}** in **${city}**.`
+        `Done. Found **${found}** lead${found !== 1 ? 's' : ''}.`
       );
     } catch (err) {
       await status.edit(`Error: ${err.message}`);
