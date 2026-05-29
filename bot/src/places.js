@@ -29,7 +29,8 @@ function normalisePhone(raw, countryCode) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-export async function searchPlaces(keyword, location, max, onLead) {
+export async function searchPlaces(keyword, location, max, onLead, countryCode) {
+  const effectiveCode = countryCode || config.countryCode;
   const query = `${keyword} in ${location}`;
   const leads = [];
   let pageToken;
@@ -52,7 +53,7 @@ export async function searchPlaces(keyword, location, max, onLead) {
         if (p.website) continue;
         if (!p.formatted_phone_number) continue;
 
-        const phone = normalisePhone(p.formatted_phone_number, config.countryCode);
+        const phone = normalisePhone(p.formatted_phone_number, effectiveCode);
         const category = (p.types || [])
           .filter((t) => !['point_of_interest', 'establishment'].includes(t))
           .join(', ').replace(/_/g, ' ');

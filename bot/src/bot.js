@@ -2,7 +2,7 @@ import { Client, GatewayIntentBits, EmbedBuilder, Events } from 'discord.js';
 import { searchPlaces } from './places.js';
 import { getStats, clearLeads } from './database.js';
 import config from './config.js';
-import { getOpenCountries, getCountriesWithTime, pickRandom } from './countries.js';
+import { getOpenCountries, getCountriesWithTime, pickRandom, getCountryCodeForLocation } from './countries.js';
 
 const client = new Client({
   intents: [
@@ -148,7 +148,7 @@ client.on(Events.MessageCreate, async (msg) => {
       await searchPlaces(keyword, city, max, async (lead) => {
         found++;
         await msg.channel.send({ embeds: [buildEmbed(lead)] });
-      });
+      }, country.code);
 
       await status.edit(
         `${country.flag} **${country.name}** — ${country.localTime} local\n` +
@@ -176,6 +176,7 @@ client.on(Events.MessageCreate, async (msg) => {
     }
 
     activeScrapes.add(msg.channelId);
+    const detectedCode = getCountryCodeForLocation(location);
     const status = await msg.reply(`Searching for **${keyword}** in **${location}** (max ${max})...`);
 
     let found = 0;
@@ -185,7 +186,7 @@ client.on(Events.MessageCreate, async (msg) => {
       await searchPlaces(keyword, location, max, async (lead) => {
         found++;
         await msg.channel.send({ embeds: [buildEmbed(lead)] });
-      });
+      }, detectedCode);
 
       await status.edit(
         `Done. Found **${found}** lead${found !== 1 ? 's' : ''} without a website.` +
