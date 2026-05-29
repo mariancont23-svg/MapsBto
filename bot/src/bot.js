@@ -123,7 +123,7 @@ client.on(Events.MessageCreate, async (msg) => {
   // ── !random ───────────────────────────────────────────────────────────────
   if (cmd === '!random') {
     const max = parseInt(parts[1]) || config.defaultMax;
-    const open = getOpenCountries();
+    const open = getCountriesWithTime().filter(c => c.isOpen);
 
     if (!open.length) {
       return msg.reply('No countries are in business hours right now (10am–4pm). Try `!when` to see when they open.');
