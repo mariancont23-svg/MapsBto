@@ -2,6 +2,7 @@ import { Client, GatewayIntentBits, EmbedBuilder, Events } from 'discord.js';
 import { searchPlaces } from './places.js';
 import { getStats, clearLeads } from './database.js';
 import config from './config.js';
+import { getOpenCountries, getCountriesWithTime, pickRandom } from './countries.js';
 
 const client = new Client({
   intents: [
@@ -42,6 +43,8 @@ function buildEmbed(lead) {
 
 const HELP = `**Commands**
 \`!scrape <keyword> <location> [max]\` — Find leads (no website only)
+\`!random [max]\` — Scrape a random country currently in business hours (10am–4pm local)
+\`!when\` — Show which countries are open for business right now
 \`!leads\` — Show total leads in database
 \`!clear\` — Delete all leads
 \`!help\` — Show this message
@@ -49,7 +52,8 @@ const HELP = `**Commands**
 **Examples**
 \`!scrape restaurante București 20\`
 \`!scrape "hair salons" London 15\`
-\`!scrape dentists Paris\``;
+\`!random 10\`
+\`!when\``;
 
 // ── Active scrapes tracker (prevent concurrent runs) ─────────────────────────
 const activeScrapes = new Set();
@@ -83,6 +87,78 @@ client.on(Events.MessageCreate, async (msg) => {
   if (cmd === '!clear') {
     const result = clearLeads();
     return msg.reply(`Deleted ${result.changes} leads. Database is empty.`);
+  }
+
+  // ── !when ─────────────────────────────────────────────────────────────────
+  if (cmd === '!when') {
+    const countries = getCountriesWithTime();
+    const open = countries.filter(c => c.isOpen);
+    const soon = countries.filter(c => !c.isOpen && c.hoursUntilOpen <= 3);
+    const closed = countries.filter(c => !c.isOpen && c.hoursUntilOpen > 3);
+
+    const lines = [];
+
+    if (open.length) {
+      lines.push('**Open now (10am–4pm local)**');
+      for (const c of open) lines.push(`${c.flag} ${c.name} — ${c.localTime}`);
+    } else {
+      lines.push('No countries in business hours right now.');
+    }
+
+    if (soon.length) {
+      lines.push('');
+      lines.push('**Opening soon (within 3h)**');
+      for (const c of soon) lines.push(`${c.flag} ${c.name} — opens in ${c.hoursUntilOpen}h (now ${c.localTime})`);
+    }
+
+    if (closed.length) {
+      lines.push('');
+      lines.push('**Closed**');
+      for (const c of closed) lines.push(`${c.flag} ${c.name} — opens in ${c.hoursUntilOpen}h (now ${c.localTime})`);
+    }
+
+    return msg.reply(lines.join('\n'));
+  }
+
+  // ── !random ───────────────────────────────────────────────────────────────
+  if (cmd === '!random') {
+    const max = parseInt(parts[1]) || config.defaultMax;
+    const open = getOpenCountries();
+
+    if (!open.length) {
+      return msg.reply('No countries are in business hours right now (10am–4pm). Try `!when` to see when they open.');
+    }
+
+    const country  = pickRandom(open);
+    const city     = pickRandom(country.cities);
+    const keyword  = pickRandom(country.keywords);
+
+    if (activeScrapes.has(msg.channelId)) {
+      return msg.reply('A scrape is already running in this channel. Wait for it to finish.');
+    }
+
+    activeScrapes.add(msg.channelId);
+    const status = await msg.reply(
+      `${country.flag} **${country.name}** — ${country.localTime} local\nSearching for **${keyword}** in **${city}** (max ${max})...`
+    );
+
+    let found = 0;
+
+    try {
+      await searchPlaces(keyword, city, max, async (lead) => {
+        found++;
+        await msg.channel.send({ embeds: [buildEmbed(lead)] });
+      });
+
+      await status.edit(
+        `${country.flag} **${country.name}** — ${country.localTime} local\n` +
+        `Done. Found **${found}** lead${found !== 1 ? 's' : ''} for **${keyword}** in **${city}**.`
+      );
+    } catch (err) {
+      await status.edit(`Error: ${err.message}`);
+    } finally {
+      activeScrapes.delete(msg.channelId);
+    }
   }
 
   // ── !scrape ────────────────────────────────────────────────────────────────
