@@ -10,11 +10,13 @@ const required = (key) => {
 };
 
 export default {
-  botToken:       required('DISCORD_BOT_TOKEN'),
-  placesApiKey:   required('GOOGLE_PLACES_API_KEY'),
-  countryCode:    process.env.COUNTRY_CODE || '40',
-  defaultMax:     parseInt(process.env.DEFAULT_MAX_LEADS) || 20,
-  dbPath:         './data/leads.db',
+  botToken:        required('DISCORD_BOT_TOKEN'),
+  placesApiKey:    required('GOOGLE_PLACES_API_KEY'),
+  countryCode:     process.env.COUNTRY_CODE || '40',
+  defaultMax:      parseInt(process.env.DEFAULT_MAX_LEADS) || 20,
+  dbPath:          './data/leads.db',
+  whatsappToken:   process.env.WHATSAPP_TOKEN   || null,
+  whatsappPhoneId: process.env.WHATSAPP_PHONE_ID || null,
   messageTemplate: process.env.MESSAGE_TEMPLATE ||
     `Hello {name}!
 
