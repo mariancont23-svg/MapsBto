@@ -1,12 +1,7 @@
 import config from './config.js';
 
-export async function sendWhatsAppMessage(phone, lead) {
+export async function sendWhatsAppMessage(phone) {
   const digits = phone.replace(/\D/g, '');
-
-  const body = config.messageTemplate
-    .replace(/\{name\}/g, lead.name)
-    .replace(/\{category\}/g, lead.category || 'business')
-    .replace(/\{address\}/g, lead.address || '');
 
   const res = await fetch(
     `https://graph.facebook.com/v19.0/${config.whatsappPhoneId}/messages`,
@@ -19,8 +14,11 @@ export async function sendWhatsAppMessage(phone, lead) {
       body: JSON.stringify({
         messaging_product: 'whatsapp',
         to: digits,
-        type: 'text',
-        text: { preview_url: false, body },
+        type: 'template',
+        template: {
+          name: 'mesaj1',
+          language: { code: 'ro' },
+        },
       }),
     }
   );

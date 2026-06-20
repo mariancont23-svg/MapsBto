@@ -95,7 +95,7 @@ function startScheduler() {
     if (!lead) return;
 
     try {
-      await sendWhatsAppMessage(lead.phone, lead);
+      await sendWhatsAppMessage(lead.phone);
       markSent(lead.phone);
       lastSentAt = Date.now();
       console.log(`WA sent → ${lead.name} (${lead.phone})`);
