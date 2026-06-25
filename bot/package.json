@@ -8,8 +8,11 @@
     "start": "node src/bot.js"
   },
   "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.7",
     "discord.js": "^14.15.3",
-    "dotenv": "^16.4.5"
+    "dotenv": "^16.4.5",
+    "pino": "^9.0.0",
+    "qrcode": "^1.5.4"
   },
   "engines": {
     "node": ">=22.0.0"

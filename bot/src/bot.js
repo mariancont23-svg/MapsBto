@@ -8,7 +8,7 @@ import {
 } from './database.js';
 import config from './config.js';
 import { getOpenCountries, getCountriesWithTime, pickRandom, getCountryCodeForLocation } from './countries.js';
-import { sendWhatsAppMessage } from './whatsapp.js';
+import { initWhatsApp, sendWhatsAppMessage, getConnectionStatus, setQRChannel } from './whatsapp.js';
 
 const client = new Client({
   intents: [
@@ -49,7 +49,6 @@ function buildEmbed(lead) {
     .setTimestamp();
 }
 
-// Post a lead embed, add reaction buttons, store message ID
 async function postLead(channel, lead) {
   const msg = await channel.send({ embeds: [buildEmbed(lead)] });
   await msg.react('✅');
@@ -63,6 +62,8 @@ const HELP = `**Commands**
 \`!random [max]\` — Scrape a random country currently in business hours (10am–4pm local)
 \`!when\` — Show which countries are open for business right now
 \`!queue\` — Show WhatsApp send queue status
+\`!waconnect\` — Connect WhatsApp (posts QR code to scan)
+\`!wastatus\` — Check if WhatsApp is connected
 \`!leads\` — Show total leads in database
 \`!clear\` — Delete all leads
 \`!help\` — Show this message
@@ -73,29 +74,25 @@ const HELP = `**Commands**
 
 **Examples**
 \`!scrape restaurante București 20\`
-\`!scrape "hair salons" London 15\`
 \`!random 10\`
-\`!when\``;
+\`!waconnect\``;
 
 // ── Active scrapes tracker ────────────────────────────────────────────────────
 const activeScrapes = new Set();
 
-// ── WhatsApp queue scheduler (1 message per 60 seconds) ──────────────────────
+// ── WhatsApp send scheduler (1 message per 60 seconds) ───────────────────────
 const SEND_INTERVAL_MS = 60_000;
-let schedulerStartedAt = null;
 let lastSentAt = null;
 
 function startScheduler() {
-  if (!config.whatsappToken || !config.whatsappPhoneId) return;
-
-  schedulerStartedAt = Date.now();
-
   setInterval(async () => {
+    if (!getConnectionStatus()) return;
+
     const lead = getNextQueued();
     if (!lead) return;
 
     try {
-      await sendWhatsAppMessage(lead.phone);
+      await sendWhatsAppMessage(lead.phone, lead);
       markSent(lead.phone);
       lastSentAt = Date.now();
       console.log(`WA sent → ${lead.name} (${lead.phone})`);
@@ -118,9 +115,11 @@ function startScheduler() {
 
 // ── Event handlers ───────────────────────────────────────────────────────────
 
-client.once(Events.ClientReady, (c) => {
+client.once(Events.ClientReady, async (c) => {
   console.log(`Bot online as ${c.user.tag}`);
   startScheduler();
+  // Auto-connect WhatsApp using stored session (silent — no QR needed if already logged in)
+  await initWhatsApp(null);
 });
 
 // ── Reaction handler ──────────────────────────────────────────────────────────
@@ -141,7 +140,7 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
     const result = queueLead(lead.phone);
     if (result.changes > 0) {
       await reaction.message.channel.send(
-        `Queued **${lead.name}** (${lead.phone}) — will send in ~${config.whatsappToken ? '60s' : 'N/A (WHATSAPP_TOKEN not set)'}`
+        `Queued **${lead.name}** (${lead.phone}) — will send in ~60s`
       );
     } else {
       await reaction.message.channel.send(`**${lead.name}** is already queued or sent.`);
@@ -176,17 +175,34 @@ client.on(Events.MessageCreate, async (msg) => {
     return msg.reply(`Deleted ${result.changes} leads. Database is empty.`);
   }
 
+  // ── !waconnect ────────────────────────────────────────────────────────────
+  if (cmd === '!waconnect') {
+    if (getConnectionStatus()) {
+      return msg.reply('WhatsApp is already connected.');
+    }
+    setQRChannel(msg.channel);
+    await msg.reply('Connecting to WhatsApp — QR code will appear below. Scan it with your phone.');
+    await initWhatsApp(msg.channel);
+    return;
+  }
+
+  // ── !wastatus ─────────────────────────────────────────────────────────────
+  if (cmd === '!wastatus') {
+    return msg.reply(getConnectionStatus()
+      ? 'WhatsApp is connected and sending.'
+      : 'WhatsApp is NOT connected. Use `!waconnect` to scan a QR code.'
+    );
+  }
+
   // ── !queue ─────────────────────────────────────────────────────────────────
   if (cmd === '!queue') {
-    if (!config.whatsappToken) {
-      return msg.reply('WhatsApp not configured. Add `WHATSAPP_TOKEN` and `WHATSAPP_PHONE_ID` to Railway variables.');
-    }
     const { pending, sent, failed } = getQueueStats();
+    const connected = getConnectionStatus();
     const nextIn = lastSentAt
       ? Math.max(0, Math.round((SEND_INTERVAL_MS - (Date.now() - lastSentAt)) / 1000))
       : 60;
     return msg.reply(
-      `**WhatsApp Queue**\n` +
+      `**WhatsApp Queue** — ${connected ? 'Connected' : 'Not connected (use `!waconnect`)'}\n` +
       `Pending: **${pending}** | Sent: **${sent}** | Failed: **${failed}**\n` +
       (pending > 0 ? `Next send in: **${nextIn}s**` : 'Queue is empty — react ✅ on a lead card to add numbers.')
     );
@@ -200,26 +216,22 @@ client.on(Events.MessageCreate, async (msg) => {
     const closed = countries.filter(c => !c.isOpen && c.hoursUntilOpen > 3);
 
     const lines = [];
-
     if (open.length) {
       lines.push('**Open now (10am–4pm local)**');
       for (const c of open) lines.push(`${c.flag} ${c.name} — ${c.localTime}`);
     } else {
       lines.push('No countries in business hours right now.');
     }
-
     if (soon.length) {
       lines.push('');
       lines.push('**Opening soon (within 3h)**');
       for (const c of soon) lines.push(`${c.flag} ${c.name} — opens in ${c.hoursUntilOpen}h (now ${c.localTime})`);
     }
-
     if (closed.length) {
       lines.push('');
       lines.push('**Closed**');
       for (const c of closed) lines.push(`${c.flag} ${c.name} — opens in ${c.hoursUntilOpen}h (now ${c.localTime})`);
     }
-
     return msg.reply(lines.join('\n'));
   }
 
