@@ -12,7 +12,9 @@ async function apiGet(path, params) {
   if (!res.ok) throw new Error(`Places API HTTP ${res.status}`);
   const json = await res.json();
   if (json.status !== 'OK' && json.status !== 'ZERO_RESULTS') {
-    throw new Error(`Places API: ${json.status} — ${json.error_message || ''}`);
+    const err = new Error(`Places API: ${json.status} — ${json.error_message || ''}`);
+    err.status = json.status;
+    throw err;
   }
   return json;
 }
@@ -38,7 +40,14 @@ export async function searchPlaces(keyword, location, max, onLead, countryCode) 
   do {
     const params = { query, language: 'en' };
     if (pageToken) { params.pagetoken = pageToken; await sleep(2000); }
-    const data = await apiGet('textsearch', params);
+    let data;
+    try {
+      data = await apiGet('textsearch', params);
+    } catch (err) {
+      // Page token expired or invalid — stop pagination gracefully
+      if (pageToken && err.status === 'INVALID_REQUEST') break;
+      throw err;
+    }
     for (const place of (data.results || [])) {
       if (leads.length >= max) break;
 

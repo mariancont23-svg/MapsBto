@@ -272,21 +272,22 @@ client.on(Events.MessageCreate, async (msg) => {
             `Found ${found} so far — also trying **${kw}** in **${city}**...`
           );
         }
-        await searchPlaces(kw, city, max - found, async (lead) => {
-          found++;
-          await postLead(msg.channel, lead);
-        }, country.code);
+        try {
+          await searchPlaces(kw, city, max - found, async (lead) => {
+            found++;
+            await postLead(msg.channel, lead);
+          }, country.code);
+        } catch (err) {
+          console.error('searchPlaces error:', err.message);
+        }
       }
-
-      await status.edit(
-        `${country.flag} **${country.name}** — ${country.localTime} local\n` +
-        `Done. Found **${found}** lead${found !== 1 ? 's' : ''}.`
-      );
-    } catch (err) {
-      await status.edit(`Error: ${err.message}`);
     } finally {
       activeScrapes.delete(msg.channelId);
     }
+    await status.edit(
+      `${country.flag} **${country.name}** — ${country.localTime} local\n` +
+      `Done. Found **${found}** lead${found !== 1 ? 's' : ''}.`
+    );
   }
 
   // ── !scrape ────────────────────────────────────────────────────────────────
@@ -314,15 +315,16 @@ client.on(Events.MessageCreate, async (msg) => {
         found++;
         await postLead(msg.channel, lead);
       }, detectedCode);
-
-      await status.edit(
-        `Done. Found **${found}** lead${found !== 1 ? 's' : ''} without a website.`
-      );
     } catch (err) {
-      await status.edit(`Error: ${err.message}`);
+      console.error('searchPlaces error:', err.message);
     } finally {
       activeScrapes.delete(msg.channelId);
     }
+    await status.edit(
+      found > 0
+        ? `Done. Found **${found}** lead${found !== 1 ? 's' : ''} without a website.`
+        : 'No leads found without a website for that search.'
+    );
   }
 });
 
