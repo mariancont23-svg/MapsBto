@@ -14,9 +14,9 @@ mkdirSync(AUTH_DIR, { recursive: true });
 
 const logger = P({ level: 'silent' });
 
-let sock         = null;
+let activeSock   = null;   // the one socket we actually use
 let isConnected  = false;
-let isConnecting = false;  // lock — prevents multiple simultaneous connect() calls
+let isConnecting = false;
 let qrChannel    = null;
 
 export function getConnectionStatus() {
@@ -30,29 +30,37 @@ export function setQRChannel(channel) {
 async function connect() {
   if (isConnecting) return;
   isConnecting = true;
+  isConnected  = false;
 
-  // Tear down any existing socket before creating a new one
-  if (sock) {
-    try { sock.end(); } catch {}
-    sock = null;
+  // Replace the old socket — but keep a ref so the old close-handler can
+  // detect it's been superseded and bail out before scheduling a reconnect.
+  if (activeSock) {
+    const old = activeSock;
+    activeSock = null;
+    try { old.end(); } catch {}
   }
 
   try {
     const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
     const { version } = await fetchLatestBaileysVersion();
 
-    sock = makeWASocket({
+    const sock = makeWASocket({
       version,
       auth: state,
       logger,
       printQRInTerminal: false,
       keepAliveIntervalMs: 10_000,
-      connectTimeoutMs: 30_000,
+      connectTimeoutMs: 60_000,
     });
+
+    activeSock = sock;
 
     sock.ev.on('creds.update', saveCreds);
 
     sock.ev.on('connection.update', async (update) => {
+      // If this socket has been replaced, ignore all its events.
+      if (sock !== activeSock) return;
+
       const { connection, lastDisconnect, qr } = update;
 
       if (qr && qrChannel) {
@@ -73,7 +81,7 @@ async function connect() {
         console.log('WhatsApp connected');
         if (qrChannel) {
           await qrChannel.send('WhatsApp connected and ready.').catch(() => {});
-          qrChannel = null; // stop posting to this channel after confirming connection
+          qrChannel = null;
         }
       }
 
@@ -84,14 +92,14 @@ async function connect() {
           ? lastDisconnect.error.output.statusCode : 0;
         const loggedOut = code === DisconnectReason.loggedOut;
 
-        if (loggedOut) {
-          console.log('WhatsApp logged out');
-        } else {
-          console.log(`WhatsApp dropped (code ${code}) — reconnecting in 5s`);
+        console.log(`WhatsApp closed (code ${code})${loggedOut ? ' — logged out' : ' — reconnecting'}`);
+
+        if (!loggedOut) {
           setTimeout(connect, 5_000);
         }
       }
     });
+
   } catch (err) {
     isConnecting = false;
     console.error('WhatsApp connect error:', err.message);
@@ -101,13 +109,12 @@ async function connect() {
 
 export async function initWhatsApp(channel) {
   if (channel) qrChannel = channel;
-  // Don't start a new connection if one is already open or in progress
   if (isConnected || isConnecting) return;
   await connect();
 }
 
 export async function sendWhatsAppMessage(phone, lead) {
-  if (!isConnected || !sock) throw new Error('WhatsApp not connected — use `!waconnect` first');
+  if (!isConnected || !activeSock) throw new Error('WhatsApp not connected — use `!waconnect` first');
 
   const digits = phone.replace(/\D/g, '');
   const jid    = `${digits}@s.whatsapp.net`;
@@ -117,5 +124,5 @@ export async function sendWhatsAppMessage(phone, lead) {
     .replace(/\{category\}/g, lead.category || 'business')
     .replace(/\{address\}/g,  lead.address  || '');
 
-  await sock.sendMessage(jid, { text });
+  await activeSock.sendMessage(jid, { text });
 }
