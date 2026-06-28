@@ -64,6 +64,7 @@ const HELP = `**Commands**
 \`!queue\` — Show WhatsApp send queue status
 \`!waconnect\` — Connect WhatsApp (posts QR code to scan)
 \`!wastatus\` — Check if WhatsApp is connected
+\`!watest +40712345678\` — Send a test message to your number
 \`!leads\` — Show total leads in database
 \`!clear\` — Delete all leads
 \`!help\` — Show this message
@@ -184,6 +185,20 @@ client.on(Events.MessageCreate, async (msg) => {
     await msg.reply('Connecting to WhatsApp — QR code will appear below. Scan it with your phone.');
     await initWhatsApp(msg.channel);
     return;
+  }
+
+  // ── !watest ───────────────────────────────────────────────────────────────
+  if (cmd === '!watest') {
+    const phone = parts[1]?.replace(/"/g, '');
+    if (!phone) return msg.reply('Usage: `!watest +40712345678`');
+    if (!getConnectionStatus()) return msg.reply('WhatsApp not connected. Use `!waconnect` first.');
+
+    try {
+      await sendWhatsAppMessage(phone, { name: 'Test', category: 'test', address: '' });
+      return msg.reply(`Test message sent to **${phone}** — check your WhatsApp.`);
+    } catch (err) {
+      return msg.reply(`Failed: ${err.message}`);
+    }
   }
 
   // ── !wastatus ─────────────────────────────────────────────────────────────
