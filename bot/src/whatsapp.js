@@ -6,7 +6,8 @@ import makeWASocket, {
 import { Boom } from '@hapi/boom';
 import P from 'pino';
 import QRCode from 'qrcode';
-import { mkdirSync } from 'fs';
+import { mkdirSync, existsSync, readdirSync } from 'fs';
+import { join } from 'path';
 import config from './config.js';
 
 const AUTH_DIR = './data/wa-auth';
@@ -107,9 +108,22 @@ async function connect() {
   }
 }
 
+export function hasSavedSession() {
+  try {
+    const files = readdirSync(AUTH_DIR);
+    return files.some(f => f.includes('creds'));
+  } catch {
+    return false;
+  }
+}
+
 export async function initWhatsApp(channel) {
   if (channel) qrChannel = channel;
-  if (isConnected || isConnecting) return;
+  if (isConnected || isConnecting) {
+    // If already connecting and a channel is now provided, update it so QR goes there
+    if (channel) qrChannel = channel;
+    return;
+  }
   await connect();
 }
 

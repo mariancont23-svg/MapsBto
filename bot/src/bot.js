@@ -8,7 +8,7 @@ import {
 } from './database.js';
 import config from './config.js';
 import { getOpenCountries, getCountriesWithTime, pickRandom, getCountryCodeForLocation } from './countries.js';
-import { initWhatsApp, sendWhatsAppMessage, getConnectionStatus, setQRChannel } from './whatsapp.js';
+import { initWhatsApp, sendWhatsAppMessage, getConnectionStatus, setQRChannel, hasSavedSession } from './whatsapp.js';
 
 const client = new Client({
   intents: [
@@ -119,8 +119,13 @@ function startScheduler() {
 client.once(Events.ClientReady, async (c) => {
   console.log(`Bot online as ${c.user.tag}`);
   startScheduler();
-  // Auto-connect WhatsApp using stored session (silent — no QR needed if already logged in)
-  await initWhatsApp(null);
+  // Only auto-reconnect if a saved session exists — avoids a stuck QR-waiting state on fresh deploys
+  if (hasSavedSession()) {
+    console.log('Saved WhatsApp session found — reconnecting...');
+    await initWhatsApp(null);
+  } else {
+    console.log('No WhatsApp session — use !waconnect in Discord to connect.');
+  }
 });
 
 // ── Reaction handler ──────────────────────────────────────────────────────────
