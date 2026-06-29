@@ -6,56 +6,67 @@ import makeWASocket, {
 import { Boom } from '@hapi/boom';
 import P from 'pino';
 import QRCode from 'qrcode';
-import { mkdirSync, existsSync, readdirSync, readFileSync, writeFileSync } from 'fs';
+import { mkdirSync, readdirSync, readFileSync, writeFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import config from './config.js';
 
-const AUTH_DIR   = './data/wa-auth';
-const REDIS_KEY  = 'wa-auth';
-const REDIS_URL  = process.env.UPSTASH_REDIS_REST_URL;
+const AUTH_DIR    = './data/wa-auth';
+const REDIS_KEY   = 'wa-auth';
+const REDIS_URL   = process.env.UPSTASH_REDIS_REST_URL;
 const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
 
 mkdirSync(AUTH_DIR, { recursive: true });
 
 const logger = P({ level: 'silent' });
 
-let activeSock   = null;
-let isConnected  = false;
-let isConnecting = false;
-let qrChannel    = null;
+let activeSock      = null;
+let isConnected     = false;
+let isConnecting    = false;
+let qrChannel       = null;
+let notifyChannel   = null; // persists for logout/error notifications
 
-// ── Redis helpers ─────────────────────────────────────────────────────────────
+// ── Redis ─────────────────────────────────────────────────────────────────────
+
+async function redisCmd(...args) {
+  if (!REDIS_URL || !REDIS_TOKEN) return null;
+  const res = await fetch(`${REDIS_URL}/pipeline`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${REDIS_TOKEN}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify([args]),
+  });
+  if (!res.ok) throw new Error(`Redis HTTP ${res.status}`);
+  const [{ result, error }] = await res.json();
+  if (error) throw new Error(`Redis: ${error}`);
+  return result;
+}
 
 async function saveAuthToRedis() {
-  if (!REDIS_URL || !REDIS_TOKEN) return;
   try {
     const files = {};
     for (const f of readdirSync(AUTH_DIR)) {
-      files[f] = readFileSync(join(AUTH_DIR, f), 'utf8');
+      try { files[f] = readFileSync(join(AUTH_DIR, f), 'utf8'); } catch {}
     }
-    await fetch(`${REDIS_URL}/set/${REDIS_KEY}`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${REDIS_TOKEN}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(JSON.stringify(files)),
-    });
+    if (!Object.keys(files).length) return;
+    await redisCmd('SET', REDIS_KEY, JSON.stringify(files));
+    console.log('Auth saved to Redis');
   } catch (err) {
     console.error('Redis save error:', err.message);
   }
 }
 
+async function clearRedisAuth() {
+  try { await redisCmd('DEL', REDIS_KEY); } catch {}
+}
+
 export async function restoreAuthFromRedis() {
-  if (!REDIS_URL || !REDIS_TOKEN) return false;
   try {
-    const res = await fetch(`${REDIS_URL}/get/${REDIS_KEY}`, {
-      headers: { Authorization: `Bearer ${REDIS_TOKEN}` },
-    });
-    const { result } = await res.json();
+    const result = await redisCmd('GET', REDIS_KEY);
     if (!result) return false;
     const files = JSON.parse(result);
     for (const [name, content] of Object.entries(files)) {
-      writeFileSync(join(AUTH_DIR, name), content);
+      writeFileSync(join(AUTH_DIR, name), content, 'utf8');
     }
-    console.log('WhatsApp auth restored from Redis');
+    console.log('Auth restored from Redis');
     return true;
   } catch (err) {
     console.error('Redis restore error:', err.message);
@@ -63,20 +74,23 @@ export async function restoreAuthFromRedis() {
   }
 }
 
-// ── Session check ─────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 export function hasSavedSession() {
-  try {
-    return readdirSync(AUTH_DIR).some(f => f.includes('creds'));
-  } catch {
-    return false;
-  }
+  try { return readdirSync(AUTH_DIR).some(f => f.includes('creds')); }
+  catch { return false; }
 }
-
-// ── Connection ────────────────────────────────────────────────────────────────
 
 export function getConnectionStatus() { return isConnected; }
 export function setQRChannel(channel) { qrChannel = channel; }
+
+function clearLocalAuth() {
+  try {
+    for (const f of readdirSync(AUTH_DIR)) rmSync(join(AUTH_DIR, f));
+  } catch {}
+}
+
+// ── Connection ────────────────────────────────────────────────────────────────
 
 async function connect() {
   if (isConnecting) return;
@@ -94,9 +108,7 @@ async function connect() {
     const { version } = await fetchLatestBaileysVersion();
 
     const sock = makeWASocket({
-      version,
-      auth: state,
-      logger,
+      version, auth: state, logger,
       printQRInTerminal: false,
       keepAliveIntervalMs: 10_000,
       connectTimeoutMs: 60_000,
@@ -106,33 +118,28 @@ async function connect() {
 
     sock.ev.on('creds.update', async () => {
       await saveCreds();
-      await saveAuthToRedis(); // persist to Redis after every credential update
+      await saveAuthToRedis();
     });
 
     sock.ev.on('connection.update', async (update) => {
       if (sock !== activeSock) return;
-
       const { connection, lastDisconnect, qr } = update;
 
       if (qr && qrChannel) {
         try {
           const buf = await QRCode.toBuffer(qr, { type: 'png', width: 300, margin: 2 });
-          await qrChannel.send({
-            content: 'Scan this QR code with WhatsApp to connect:',
-            files: [{ attachment: buf, name: 'qr.png' }],
-          });
-        } catch (err) {
-          console.error('QR error:', err.message);
-        }
+          await qrChannel.send({ content: 'Scan with WhatsApp:', files: [{ attachment: buf, name: 'qr.png' }] });
+        } catch (err) { console.error('QR error:', err.message); }
       }
 
       if (connection === 'open') {
         isConnected  = true;
         isConnecting = false;
         console.log('WhatsApp connected');
-        await saveAuthToRedis(); // save immediately on connect
+        await saveAuthToRedis();
         if (qrChannel) {
           await qrChannel.send('WhatsApp connected and ready.').catch(() => {});
+          notifyChannel = qrChannel;
           qrChannel = null;
         }
       }
@@ -140,12 +147,19 @@ async function connect() {
       if (connection === 'close') {
         isConnected  = false;
         isConnecting = false;
-        const code      = lastDisconnect?.error instanceof Boom
-          ? lastDisconnect.error.output.statusCode : 0;
+        const code      = lastDisconnect?.error instanceof Boom ? lastDisconnect.error.output.statusCode : 0;
         const loggedOut = code === DisconnectReason.loggedOut;
 
-        console.log(`WhatsApp closed (code ${code})${loggedOut ? ' — logged out' : ' — reconnecting'}`);
-        if (!loggedOut) setTimeout(connect, 5_000);
+        console.log(`WhatsApp closed — code ${code} — ${loggedOut ? 'logged out' : 'reconnecting'}`);
+
+        if (loggedOut) {
+          clearLocalAuth();
+          await clearRedisAuth();
+          const ch = notifyChannel;
+          if (ch) await ch.send('WhatsApp was logged out by the server. Type `!waconnect` to scan a new QR code.').catch(() => {});
+        } else {
+          setTimeout(connect, 5_000);
+        }
       }
     });
 
@@ -157,21 +171,17 @@ async function connect() {
 }
 
 export async function initWhatsApp(channel) {
-  if (channel) qrChannel = channel;
+  if (channel) { qrChannel = channel; notifyChannel = channel; }
   if (isConnected || isConnecting) return;
   await connect();
 }
 
 export async function sendWhatsAppMessage(phone, lead) {
   if (!isConnected || !activeSock) throw new Error('WhatsApp not connected — use `!waconnect` first');
-
   const digits = phone.replace(/\D/g, '');
-  const jid    = `${digits}@s.whatsapp.net`;
-
   const text = config.messageTemplate
     .replace(/\{name\}/g,     lead.name)
     .replace(/\{category\}/g, lead.category || 'business')
     .replace(/\{address\}/g,  lead.address  || '');
-
-  await activeSock.sendMessage(jid, { text });
+  await activeSock.sendMessage(`${digits}@s.whatsapp.net`, { text });
 }
