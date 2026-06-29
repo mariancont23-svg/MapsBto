@@ -176,6 +176,18 @@ export async function initWhatsApp(channel) {
   await connect();
 }
 
+export async function logoutWhatsApp() {
+  clearLocalAuth();
+  await clearRedisAuth();
+  if (activeSock) {
+    try { await activeSock.logout(); } catch {}
+    activeSock = null;
+  }
+  isConnected  = false;
+  isConnecting = false;
+  qrChannel    = null;
+}
+
 export async function sendWhatsAppMessage(phone, lead) {
   if (!isConnected || !activeSock) throw new Error('WhatsApp not connected — use `!waconnect` first');
   const digits = phone.replace(/\D/g, '');

@@ -8,7 +8,7 @@ import {
 } from './database.js';
 import config from './config.js';
 import { getOpenCountries, getCountriesWithTime, pickRandom, getCountryCodeForLocation } from './countries.js';
-import { initWhatsApp, sendWhatsAppMessage, getConnectionStatus, setQRChannel, hasSavedSession, restoreAuthFromRedis } from './whatsapp.js';
+import { initWhatsApp, sendWhatsAppMessage, getConnectionStatus, setQRChannel, hasSavedSession, restoreAuthFromRedis, logoutWhatsApp } from './whatsapp.js';
 
 const client = new Client({
   intents: [
@@ -180,6 +180,12 @@ client.on(Events.MessageCreate, async (msg) => {
   if (cmd === '!clear') {
     const result = clearLeads();
     return msg.reply(`Deleted ${result.changes} leads. Database is empty.`);
+  }
+
+  // ── !walogout ─────────────────────────────────────────────────────────────
+  if (cmd === '!walogout') {
+    await logoutWhatsApp();
+    return msg.reply('WhatsApp logged out and session cleared. Use `!waconnect` to connect a different number.');
   }
 
   // ── !waconnect ────────────────────────────────────────────────────────────
