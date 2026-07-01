@@ -180,12 +180,20 @@ export async function logoutWhatsApp() {
   clearLocalAuth();
   await clearRedisAuth();
   if (activeSock) {
-    try { await activeSock.logout(); } catch {}
-    activeSock = null;
+    const sock = activeSock;
+    // Null out activeSock BEFORE logout so the connection.update close event
+    // is ignored by the per-socket guard and doesn't schedule a reconnect.
+    activeSock   = null;
+    isConnected  = false;
+    isConnecting = false;
+    qrChannel    = null;
+    try { await sock.logout(); } catch {}
+    try { sock.end(); } catch {}
+  } else {
+    isConnected  = false;
+    isConnecting = false;
+    qrChannel    = null;
   }
-  isConnected  = false;
-  isConnecting = false;
-  qrChannel    = null;
 }
 
 export async function sendWhatsAppMessage(phone, lead) {
