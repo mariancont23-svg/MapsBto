@@ -229,6 +229,7 @@ export async function sendWhatsAppMessage(phone, lead) {
     .replace(/\{name\}/g,     lead.name)
     .replace(/\{category\}/g, lead.category || 'business')
     .replace(/\{address\}/g,  lead.address  || '');
-  await activeSock.sendMessage(resolvedJid, { text });
+  const result = await activeSock.sendMessage(resolvedJid, { text });
+  console.log(`WA sendMessage result → status:${result?.status} id:${result?.key?.id} to:${resolvedJid}`);
   return resolvedJid;
 }
