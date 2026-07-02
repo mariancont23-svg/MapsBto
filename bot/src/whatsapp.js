@@ -2,6 +2,7 @@ import makeWASocket, {
   useMultiFileAuthState,
   DisconnectReason,
   fetchLatestBaileysVersion,
+  Browsers,
 } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
 import P from 'pino';
@@ -23,7 +24,8 @@ let activeSock      = null;
 let isConnected     = false;
 let isConnecting    = false;
 let qrChannel       = null;
-let notifyChannel   = null; // persists for logout/error notifications
+let notifyChannel   = null;
+let lastQrMessage   = null; // track last QR Discord message so we can replace it
 
 // ── Redis ─────────────────────────────────────────────────────────────────────
 
@@ -109,6 +111,7 @@ async function connect() {
 
     const sock = makeWASocket({
       version, auth: state, logger,
+      browser: Browsers.macOS('Desktop'),
       printQRInTerminal: false,
       keepAliveIntervalMs: 10_000,
       connectTimeoutMs: 60_000,
@@ -128,17 +131,25 @@ async function connect() {
       if (qr && qrChannel) {
         try {
           const buf = await QRCode.toBuffer(qr, { type: 'png', width: 300, margin: 2 });
-          await qrChannel.send({ content: 'Scan with WhatsApp:', files: [{ attachment: buf, name: 'qr.png' }] });
+          // Delete the previous QR message so only the latest (valid) one is visible
+          if (lastQrMessage) {
+            try { await lastQrMessage.delete(); } catch {}
+          }
+          lastQrMessage = await qrChannel.send({
+            content: 'Scan this QR code with WhatsApp (expires in ~20s — a fresh one will appear automatically):',
+            files: [{ attachment: buf, name: 'qr.png' }],
+          });
         } catch (err) { console.error('QR error:', err.message); }
       }
 
       if (connection === 'open') {
         isConnected  = true;
         isConnecting = false;
+        lastQrMessage = null;
         console.log('WhatsApp connected');
         await saveAuthToRedis();
         if (qrChannel) {
-          await qrChannel.send('WhatsApp connected and ready.').catch(() => {});
+          await qrChannel.send('✅ WhatsApp connected and ready.').catch(() => {});
           notifyChannel = qrChannel;
           qrChannel = null;
         }
@@ -155,9 +166,14 @@ async function connect() {
         if (loggedOut) {
           clearLocalAuth();
           await clearRedisAuth();
+          lastQrMessage = null;
           const ch = notifyChannel;
           if (ch) await ch.send('WhatsApp was logged out by the server. Type `!waconnect` to scan a new QR code.').catch(() => {});
         } else {
+          // Notify the QR channel about the failure so the user knows what happened
+          if (qrChannel && code) {
+            await qrChannel.send(`⚠️ Connection failed (code ${code}) — retrying in 5s...`).catch(() => {});
+          }
           setTimeout(connect, 5_000);
         }
       }
@@ -183,16 +199,18 @@ export async function logoutWhatsApp() {
     const sock = activeSock;
     // Null out activeSock BEFORE logout so the connection.update close event
     // is ignored by the per-socket guard and doesn't schedule a reconnect.
-    activeSock   = null;
-    isConnected  = false;
-    isConnecting = false;
-    qrChannel    = null;
+    activeSock    = null;
+    isConnected   = false;
+    isConnecting  = false;
+    qrChannel     = null;
+    lastQrMessage = null;
     try { await sock.logout(); } catch {}
     try { sock.end(); } catch {}
   } else {
-    isConnected  = false;
-    isConnecting = false;
-    qrChannel    = null;
+    isConnected   = false;
+    isConnecting  = false;
+    qrChannel     = null;
+    lastQrMessage = null;
   }
 }
 
