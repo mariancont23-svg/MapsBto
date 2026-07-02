@@ -217,9 +217,14 @@ export async function logoutWhatsApp() {
 export async function sendWhatsAppMessage(phone, lead) {
   if (!isConnected || !activeSock) throw new Error('WhatsApp not connected — use `!waconnect` first');
   const digits = phone.replace(/\D/g, '');
+  const jid = `${digits}@s.whatsapp.net`;
+
+  const [check] = await activeSock.onWhatsApp(jid);
+  if (!check?.exists) throw new Error(`+${digits} is not registered on WhatsApp`);
+
   const text = config.messageTemplate
     .replace(/\{name\}/g,     lead.name)
     .replace(/\{category\}/g, lead.category || 'business')
     .replace(/\{address\}/g,  lead.address  || '');
-  await activeSock.sendMessage(`${digits}@s.whatsapp.net`, { text });
+  await activeSock.sendMessage(jid, { text });
 }
