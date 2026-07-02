@@ -206,8 +206,8 @@ client.on(Events.MessageCreate, async (msg) => {
     if (!getConnectionStatus()) return msg.reply('WhatsApp not connected. Use `!waconnect` first.');
 
     try {
-      await sendWhatsAppMessage(phone, { name: 'Test', category: 'test', address: '' });
-      return msg.reply(`Test message sent to **${phone}** — check your WhatsApp.`);
+      const resolvedJid = await sendWhatsAppMessage(phone, { name: 'Test', category: 'test', address: '' });
+      return msg.reply(`Test message sent to **${phone}** (resolved JID: \`${resolvedJid}\`) — check your WhatsApp.`);
     } catch (err) {
       return msg.reply(`Failed: ${err.message}`);
     }

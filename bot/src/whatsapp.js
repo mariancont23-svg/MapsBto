@@ -222,9 +222,13 @@ export async function sendWhatsAppMessage(phone, lead) {
   const [check] = await activeSock.onWhatsApp(jid);
   if (!check?.exists) throw new Error(`+${digits} is not registered on WhatsApp`);
 
+  // Use the JID returned by WhatsApp (may differ from what we constructed)
+  const resolvedJid = check.jid || jid;
+
   const text = config.messageTemplate
     .replace(/\{name\}/g,     lead.name)
     .replace(/\{category\}/g, lead.category || 'business')
     .replace(/\{address\}/g,  lead.address  || '');
-  await activeSock.sendMessage(jid, { text });
+  await activeSock.sendMessage(resolvedJid, { text });
+  return resolvedJid;
 }
